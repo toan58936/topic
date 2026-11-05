@@ -1,0 +1,5 @@
+# Dashboard: không cài torch
+streamlit
+pandas
+numpy
+scipy

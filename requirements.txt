@@ -1,0 +1,10 @@
+# Ghim phiên bản (pip freeze) sau lần chạy Colab đầu tiên
+torch
+transformers
+scikit-learn
+scipy
+pandas
+numpy
+pyarrow
+pyyaml
+pytest

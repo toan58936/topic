@@ -1,0 +1,17 @@
+# dữ liệu và trọng số: không đưa lên GitHub
+data/
+data_smoke/
+review.json
+*.parquet
+*.pt
+*.pth
+
+# kết quả có nội dung review: chỉ để ở Drive hoặc máy cá nhân
+reports/*_with_text.csv
+
+# Python và công cụ
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
+.venv/
