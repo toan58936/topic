@@ -22,6 +22,7 @@ Bộ test kiểm chứng `model_builder.py` **độc lập** với huấn luyệ
 
 | Hàm hoặc fixture | Nhiệm vụ |
 | :--- | :--- |
+| `no_dropout(config)` | Đặt mọi dropout của backbone về 0 và trả về `config`: `hidden_dropout_prob`, `attention_probs_dropout_prob` cho BERT/RoBERTa; `dropout`, `attention_dropout` (và `seq_classif_dropout`) cho DistilBERT. Dùng chung với test 04 (cùng định nghĩa, đặt trong `conftest.py`) |
 | `tiny_config(backbone)` | Trả về cấu hình nhỏ: `BertConfig` và `RobertaConfig` với `hidden_size=32`, 2 lớp, 2 đầu chú ý, `intermediate_size=64`, `vocab_size=1000`; `DistilBertConfig` với `dim=32`, `n_layers=2`, `n_heads=2`, `hidden_dim=64`, `vocab_size=1000` |
 | `make_batch(backbone, batch_size, seq_len)` | `input_ids` ngẫu nhiên trong `[5, 1000)` và `attention_mask` toàn 1, kiểu `long` |
 | `pad_batch(backbone, ids, mask, to_len)` | Thêm token đệm đúng id của backbone (RoBERTa là 1, hai backbone còn lại là 0) vào cuối, `attention_mask` bằng 0 ở phần thêm |
@@ -71,7 +72,7 @@ Bộ test kiểm chứng `model_builder.py` **độc lập** với huấn luyệ
 | M12 | `test_m12_gradients_flow` | Một lần `forward`, tính MSE với nhãn ngẫu nhiên, `backward`. | Mọi tham số có `requires_grad` có `grad` khác `None` và hữu hạn | Tham số bị cắt khỏi đồ thị tính toán (ví dụ `detach` nhầm); `NaN`. |
 | M13 | `test_m13_dropout_train_vs_eval` | `dropout=0.5`. Hai lần `forward` trong `eval`; hai lần trong `train`. | Hai lần ở `eval` giống hệt nhau; hai lần ở `train` khác nhau | Dropout không được áp dụng, hoặc áp dụng cả khi `eval` làm dự đoán không ổn định. |
 | M14 | `test_m14_seed_reproducible_init` | `torch.manual_seed(42)` rồi `build_model`, lặp lại; thêm một lần với seed `7`. | Hai `state_dict` seed 42 giống hệt nhau; seed 7 khác | Khởi tạo không tái lập theo seed. |
-| M15 | `test_m15_overfit_small_batch` | 8 mẫu cố định, nhãn trong 1-5, `dropout=0`, AdamW (`lr=1e-3`), 100 bước, loss Huber trên đầu ra thô. | Loss cuối nhỏ hơn 0.5 lần loss đầu (đề xuất; hiệu chỉnh ngưỡng ở lần chạy đầu) | Mô hình hoặc đồ thị tính toán không học được gì (ví dụ đầu ra không phụ thuộc đầu vào). |
+| M15 | `test_m15_overfit_small_batch` | 8 mẫu cố định, nhãn trong 1-5, `dropout=0` ở head **và** `backbone_config=no_dropout(tiny_config(backbone))` (nếu không, dropout 0.1 của backbone làm loss nhiễu), AdamW (`lr=1e-3`), 100 bước, loss Huber trên đầu ra thô. | Loss cuối nhỏ hơn 0.5 lần loss đầu (đề xuất; hiệu chỉnh ngưỡng ở lần chạy đầu) | Mô hình hoặc đồ thị tính toán không học được gì (ví dụ đầu ra không phụ thuộc đầu vào). |
 
 **Nhóm E: Mô hình và tokenizer thật (đánh dấu `slow`)**
 

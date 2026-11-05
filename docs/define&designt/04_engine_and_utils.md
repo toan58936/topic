@@ -67,7 +67,7 @@ Mục tiêu:
 | FR-10 | Trước mỗi epoch, `fit` đặt lại bộ sinh xáo trộn của `train_loader` bằng `seed + epoch`. |
 | FR-11 | `fit` tiếp tục từ `last.pt` khi cấu hình khớp, và từ chối khi cấu hình khác, khi lần chạy đã hoàn tất hoặc khi đã có kết quả mà không được phép ghi đè (bảng ở mục 2.5). |
 | FR-12 | `fit` ghi `run_meta.json` gồm số tham số, thời gian từng epoch, tổng thời gian huấn luyện (cộng dồn qua các lần tiếp tục), epoch tốt nhất, trạng thái. |
-| FR-13 | `fit` không nhận `test_loader` và không đọc tập Test. |
+| FR-13 | `fit` không nhận `test_loader`: không lặp qua tập Test và không dùng nó để chọn mô hình, loss hay số epoch. (`run_training` vẫn gọi `create_dataloaders` nên đọc `test.parquet` để dựng loader, nhưng không lặp qua.) |
 | FR-14 | `compare_runs` đọc `history.csv` của nhiều lần chạy và trả về bảng so sánh RMSE Val tốt nhất. |
 | FR-15 | `load_config` áp mặc định, ép kiểu số (kể cả khi YAML đọc `2e-5` thành chuỗi), từ chối khoá lạ và giá trị không hợp lệ. |
 | FR-16 | `resolve_output_bias` đổi `output_bias_init: train_mean` thành trung bình nhãn Train (chỉ đọc cột `stars` của `train.parquet`). |
@@ -97,7 +97,7 @@ Mục tiêu:
 1. `set_seed` cho cùng chuỗi số ngẫu nhiên khi gọi lại; checkpoint ghi nguyên tử và nạp lại đủ nội dung bằng `weights_only=True`.
 2. `fit` chạy đúng số epoch, `history.csv` đủ cột, `best_model.pt` ứng với RMSE Val nhỏ nhất (nạp lại và đánh giá cho đúng giá trị đó).
 3. Dừng sau epoch k rồi tiếp tục cho cùng kết quả như chạy liền (trên CPU, dropout bằng 0); cấu hình khác bị từ chối; lần chạy đã hoàn tất không bị ghi đè âm thầm.
-4. Toàn bộ quy trình huấn luyện chạy được khi `test_loader` bị cài để lỗi nếu có ai lặp qua nó; chỉ `export_test_predictions` đọc Test.
+4. Toàn bộ quy trình huấn luyện chạy được khi `test_loader` bị cài để lỗi nếu có ai lặp qua nó; chỉ `export_test_predictions` lặp qua `test_loader` (`merge_test_predictions` chỉ đọc cột `text` từ `test.parquet`).
 5. Loss không hữu hạn dừng huấn luyện bằng `FloatingPointError`; `fp16` trên CPU tự tắt kèm cảnh báo.
 6. `predict` trả về số thực trong 1.0-5.0, không đổi theo `batch_size`, và không để mô hình ở chế độ `eval` nếu lúc nhận nó đang ở `train`.
 7. `export_test_predictions` và `merge_test_predictions` ghi đúng cột, không ghi đè âm thầm, và từ chối khi các file không khớp `review_id` hoặc nhãn.
@@ -136,12 +136,13 @@ predict.py: load_trained_model → export_test_predictions (đọc test_loader)
 
 **Tuần 1 (kịp Mốc 1, theo `docs/define.md` mục 14):**
 
-1. Tạo thư mục dữ liệu nhỏ `data_smoke/` (khoảng 8 review lấy từ ba file `parquet`) và chạy `train.py --config configs/smoke.yaml`: bước Smoke test của `docs/design.md` mục 8 (không lỗi, loss hợp lệ, mỗi review ra một số thực).
-2. Chạy hai lần huấn luyện **đầy đủ** trên BERT với cùng thiết lập: `configs/bert.yaml` (Huber, `run_name: bert`) và `configs/bert_mse.yaml` (MSE, `run_name: bert_mse`). Dùng đủ thiết lập để lần chạy thắng được dùng làm mô hình cuối, không phải huấn luyện lại.
-3. `compare_runs(["bert", "bert_mse"], results_dir)` để so RMSE Val tốt nhất theo ngưỡng "đáng kể" mà nhóm chốt **trước khi xem kết quả** (xem mục 2.11).
-4. Đọc `epoch_seconds_mean` trong `run_meta.json` để quyết định giữ 60.000 hay tăng lên 100.000 review.
+1. Tạo thư mục dữ liệu nhỏ `data_smoke/` (khoảng 8 review lấy từ ba file `parquet`) và chạy `train.py --config configs/smoke.yaml`: bước Smoke test của `docs/design.md` mục 8 (không lỗi, loss hợp lệ, mỗi review ra một số thực). **`data_smoke/` chứa text Yelp thật nên phải nằm trong `.gitignore`** (Design mục 7 cấm đưa cột `text` lên repo); hoặc sinh dữ liệu tổng hợp thay vì lấy review thật.
+2. **Đo tốc độ trước khi chạy đầy đủ:** chạy `configs/bert.yaml` vài trăm bước (dòng log mỗi `log_every` bước ghi số bước/giây và thời gian epoch ước tính; có thể dừng bằng ngắt thủ công hoặc `epochs` nhỏ). Dựa vào đó quyết định giữ 60.000 hay tăng lên 100.000 review. Nếu đổi kích thước mẫu thì chạy lại `prepare_splits(overwrite=True)` và baseline **trước** các lần chạy đầy đủ, để không lần chạy cuối nào phải lặp lại.
+3. Chạy hai lần huấn luyện **đầy đủ** trên BERT với cùng thiết lập: `configs/bert.yaml` (Huber, `run_name: bert`) và `configs/bert_mse.yaml` (MSE, `run_name: bert_mse`). Dùng đủ thiết lập để lần chạy thắng được dùng làm mô hình cuối, không phải huấn luyện lại.
+4. `compare_runs(["bert", "bert_mse"], results_dir)` để so RMSE Val tốt nhất theo ngưỡng "đáng kể" mà nhóm chốt **trước khi xem kết quả** (xem mục 2.11).
+5. `epoch_seconds_mean` trong `run_meta.json` của hai lần chạy đầy đủ dùng để xác nhận ngân sách thời gian Tuần 2, không còn dùng để đổi kích thước mẫu (đã quyết ở bước 2).
 
-**Tuần 2:** chạy `roberta` và `distilbert` với loss đã chốt. Nếu MSE thắng thì lần chạy `bert_mse` là `bert` cuối; nếu Huber thắng thì `bert` là bản cuối. Không có lần chạy cuối nào phải lặp lại vì quyết định loss.
+**Tuần 2:** chạy `roberta` và `distilbert` với loss đã chốt. Nếu MSE thắng thì lần chạy `bert_mse` là `bert` cuối; nếu Huber thắng thì `bert` là bản cuối. Không có lần chạy cuối nào phải lặp lại vì quyết định loss; lần lặp duy nhất có thể xảy ra là khi bước đo tốc độ làm đổi kích thước mẫu, và việc đó được làm trước bước 3.
 
 **Sau khi mọi cấu hình đã chốt (mỗi mô hình một lần, trên Test):**
 
@@ -225,7 +226,7 @@ load_checkpoint(path: str, map_location="cpu") -> dict
 | File | Nội dung (khoá) | Khi nào | Mục đích |
 | :--- | :--- | :--- | :--- |
 | `last.pt` | `format_version`, `epoch` (số epoch đã xong), `model_state_dict`, `optimizer_state_dict`, `scheduler_state_dict`, `scaler_state_dict` (hoặc `None`), `history` (danh sách `dict`), `best_val_rmse`, `best_epoch`, `train_seconds`, `run_config` | Ghi đè sau mỗi epoch | Tiếp tục huấn luyện |
-| `best_model.pt` | `format_version`, `epoch`, `val_rmse`, `model_state_dict`, `run_config` | Khi RMSE Val tốt hơn mọi epoch trước | Suy luận và xuất kết quả |
+| `best_model.pt` | `format_version`, `epoch`, `val_rmse`, `model_state_dict`, `run_config`, `backbone_config` (`model.backbone.config.to_dict()`, chỉ kiểu cơ bản) | Khi RMSE Val tốt hơn mọi epoch trước | Suy luận và xuất kết quả |
 
 **Dung lượng ước tính** (`float32`, từ số tham số ở `docs/03_model.md` mục 2.9): `best_model.pt` khoảng 0,44 GB (BERT), 0,50 GB (RoBERTa), 0,27 GB (DistilBERT); `last.pt` lớn gấp khoảng ba (mô hình cộng hai vector trạng thái của AdamW), khoảng 1,3 GB với BERT. Bốn lần chạy (`bert`, `roberta`, `distilbert`, `bert_mse`) giữ lại khoảng 1,6 GB `best_model.pt`. Vì vậy `last.pt` bị xoá khi lần chạy hoàn tất (trừ khi `keep_last=True`).
 
@@ -236,7 +237,7 @@ build_loss(name: str, delta: float = 1.0) -> nn.Module
 build_optimizer_and_scheduler(model, lr, weight_decay, total_steps, warmup_ratio) -> (optimizer, scheduler)
 train_one_epoch(model, loader, optimizer, scheduler, loss_fn, device, *,
                 scaler=None, fp16=True, grad_clip=1.0, log_every=100) -> dict
-evaluate(model, loader, device, *, loss_fn=None, fp16=True) -> dict
+evaluate(model, loader, device, *, loss_fn=None, fp16=None) -> dict   # None = tự động: bật khi và chỉ khi CUDA
 fit(model, train_loader, val_loader, run_config, checkpoint_dir, results_dir, *,
     device=None, resume=True, overwrite=False, keep_last=False, stop_after_epoch=None) -> dict
 compare_runs(run_names, results_dir) -> pandas.DataFrame
@@ -262,13 +263,14 @@ với mỗi batch:
     nếu có scaler: scaler.scale(loss).backward(); scaler.unscale_(optimizer)
     ngược lại:     loss.backward()
     nếu grad_clip: clip_grad_norm_(model.parameters(), grad_clip)
-    nếu có scaler: scaler.step(optimizer); scaler.update()
-    ngược lại:     optimizer.step()
-    scheduler.step()
+    nếu có scaler: scale_trước = scaler.get_scale(); scaler.step(optimizer); scaler.update()
+                   bước_bị_bỏ = scaler.get_scale() < scale_trước      # gradient inf: GradScaler bỏ bước tối ưu
+    ngược lại:     optimizer.step(); bước_bị_bỏ = False
+    nếu không bước_bị_bỏ: scheduler.step()                            # tránh cảnh báo và lệch lịch một bước
 trả về {"train_loss": trung bình theo mẫu, "n_batches", "lr": tốc độ học cuối}
 ```
 
-`fp16=True` mà thiết bị không phải CUDA thì tắt `fp16` và `GradScaler`, kèm `UserWarning`. Gọi `loss.item()` mỗi bước để kiểm tra hữu hạn; chi phí này nhỏ so với một bước huấn luyện mô hình 256 token.
+`fp16=True` mà thiết bị không phải CUDA thì tắt `fp16` và `GradScaler`, kèm `UserWarning`. Với `evaluate`, `predict` và `export_test_predictions`, `fp16=None` (mặc định) nghĩa là tự động: bật khi có CUDA, tắt khi không, **không cảnh báo**; chỉ `fp16=True` tường minh trên CPU mới cảnh báo. Ba hàm này dùng chung mặc định để cùng một review ra cùng điểm ở mọi đường suy luận. Gọi `loss.item()` mỗi bước để kiểm tra hữu hạn; chi phí này nhỏ so với một bước huấn luyện mô hình 256 token.
 
 **Kiểm định — `evaluate`:** đặt `model.eval()`, dùng `torch.no_grad()`, autocast như trên; trả về
 
@@ -329,6 +331,8 @@ theo đúng thứ tự `loader` (với `val_loader` và `test_loader` không xá
 | Có `last.pt`, `resume=True`, cấu hình khác | `ValueError` nêu khoá khác nhau |
 | `run_meta.status = "completed"` | `FileExistsError`, trừ khi `overwrite=True` (xoá kết quả cũ, chạy lại) |
 | Có kết quả cũ, `resume=False`, `overwrite=False` | `FileExistsError` |
+| Có `last.pt`, `resume=True`, `overwrite=True` | `overwrite` thắng: xoá kết quả và checkpoint cũ, chạy lại từ epoch 1 |
+| `stop_after_epoch` ngoài `[1, epochs − 1]` | `ValueError` (dừng sau epoch cuối thì lần chạy đã hoàn tất, không còn gì để tiếp tục) |
 
 Hai cấu hình được coi là khớp khi mọi khoá bằng nhau, trừ `num_workers`, `device`, `log_every`, `data_dir`, `checkpoint_dir`, `results_dir`.
 
@@ -356,11 +360,13 @@ main(argv=None) -> int
 **`run_training(cfg)`:**
 
 ```text
-1. set_seed(cfg.seed)                          # ngay trước build_model (docs/03_model.md mục 2.7)
+1. set_seed(cfg.seed)                          # seed ban đầu cho các bước dựng loader
 2. device = get_device(cfg.device)
 3. nếu loaders chưa truyền: tokenizer = build_tokenizer(backbone)
                             train_loader, val_loader, test_loader = create_dataloaders(...)
-4. nếu model chưa truyền: model = build_model(backbone, pooling, dropout,
+4. set_seed(cfg.seed)                          # NGAY TRƯỚC build_model (docs/03_model.md mục 2.7),
+                                               # để trọng số head không phụ thuộc việc bước 3 có tiêu thụ RNG hay không
+   nếu model chưa truyền: model = build_model(backbone, pooling, dropout,
                                               output_bias_init=resolve_output_bias(cfg))
 5. ghi bản sao cấu hình: results_dir/runs/run_name/config.yaml
 6. result = fit(model, train_loader, val_loader, cfg, checkpoint_dir, results_dir, ...)
@@ -382,10 +388,10 @@ python -m going_modular.train --config configs/bert.yaml --set run_name=bert_mse
 
 ```python
 predict(texts, model, tokenizer, *, device=None, max_length=256, batch_size=32,
-        fp16=False, clip=True) -> float | np.ndarray
+        fp16=None, clip=True) -> float | np.ndarray
 load_trained_model(checkpoint_path, device=None, *, backbone_config=None) -> (model, info)
 export_test_predictions(model, test_loader, model_name, out_dir, *, device=None,
-                        fp16=True, overwrite=False, run_info=None) -> dict
+                        fp16=None, overwrite=False, run_info=None) -> dict
 merge_test_predictions(model_names, preds_dir, test_parquet, out_dir, *,
                        baseline_preds=None, overwrite=False) -> pandas.DataFrame
 collect_summary_inputs(model_runs, results_dir) -> dict
@@ -393,7 +399,7 @@ collect_summary_inputs(model_runs, results_dir) -> dict
 
 **`predict`:** nhận một chuỗi (trả về `float`) hoặc danh sách chuỗi (trả về `np.ndarray` shape `(N,)`). Gọi tokenizer theo từng lô `batch_size` với `padding=True` (đệm tới chuỗi dài nhất trong lô), `truncation=True`, `max_length`, `return_tensors="pt"`; chỉ đọc `["input_ids"]` và `["attention_mask"]` từ kết quả (nên tokenizer giả trong test chỉ cần hai khoá này). Kết quả không phụ thuộc `batch_size` và cách đệm (đảm bảo bởi `docs/03_model.md` mục 1.5, tiêu chí 2). Điểm đã clip bằng `clip_scores` khi `clip=True`; `clip=False` trả điểm thô. Hàm tự đặt `eval`, `no_grad`, rồi khôi phục chế độ ban đầu của mô hình.
 
-**`load_trained_model(checkpoint_path)`:** nạp `best_model.pt` bằng `load_checkpoint`; đọc `run_config` để lấy `backbone`, `pooling`, `dropout`; dựng `build_model(backbone, pooling, dropout, pretrained=False, backbone_config=backbone_config)` (khi `backbone_config` là `None`, chỉ tải tệp cấu hình nhỏ, không tải trọng số pretrained); `load_state_dict` (nghiêm ngặt); đặt `eval`. Trả về `(model, info)` với `info = {"run_name", "backbone", "epoch", "val_rmse", "run_config"}`.
+**`load_trained_model(checkpoint_path)`:** nạp `best_model.pt` bằng `load_checkpoint`; đọc `run_config` để lấy `backbone`, `pooling`, `dropout`; xác định `backbone_config`: tham số truyền vào nếu có, không thì khoá `backbone_config` trong checkpoint (dựng lại bằng `AutoConfig.for_model(model_type, **dict)`, **không cần mạng**); chỉ khi checkpoint cũ không có khoá này mới rơi về `AutoConfig.from_pretrained` (cần mạng hoặc cache, kèm cảnh báo); dựng `build_model(backbone, pooling, dropout, pretrained=False, backbone_config=backbone_config)`; `load_state_dict` (nghiêm ngặt); đặt `eval`. Trả về `(model, info)` với `info = {"run_name", "backbone", "epoch", "val_rmse", "run_config"}`.
 
 **`export_test_predictions(model, test_loader, model_name, out_dir)`** — hàm **duy nhất** đọc tập Test:
 
@@ -479,10 +485,12 @@ drive/project/
 | Cấu hình bằng YAML; `--set` để ghi đè; từ chối khoá lạ | Đề xuất |
 | `output_bias_init = train_mean` làm mặc định, như nhau cho ba backbone | Đề xuất (quyết định mà `docs/03_model.md` mục 2.7 giao cho tài liệu này) |
 | Lần chạy đối chứng `bert_mse` dùng đủ thiết lập để làm mô hình cuối nếu thắng | Đề xuất |
-| Ngưỡng "thấp hơn đáng kể" để đổi sang MSE | Chưa chốt: nhóm cần đặt con số trước khi xem kết quả (đề xuất: RMSE Val tốt nhất của MSE thấp hơn của Huber ít nhất 1% tương đối, tức `rel_diff_pct_vs_first` từ 1 trở lên) |
+| Ngưỡng "thấp hơn đáng kể" để đổi sang MSE | Chưa chốt: nhóm cần đặt con số trước khi xem kết quả (đề xuất: RMSE Val tốt nhất của MSE thấp hơn của Huber ít nhất 1% tương đối, tức `rel_diff_pct_vs_first` từ 1 trở lên). Lưu ý: chỉ có một seed nên 1% có thể nằm trong nhiễu giữa các lần chạy; và RMSE vốn thiên về MSE (cùng hàm mục tiêu) nên nên xét thêm `best_val_mae` trước khi quyết định |
+| Chỉ số chi phí không cùng cơ sở | `train_seconds` của Transformer gồm cả kiểm định Val mỗi epoch; `fit_seconds` của baseline chỉ tính tổ hợp thắng, không tính cả lưới; suy luận baseline chạy CPU còn Transformer chạy GPU và gồm token hoá. Báo cáo phải ghi rõ định nghĩa từng cột và thiết bị (`device` trong `run_meta.json` và meta dự đoán) khi so sánh |
+| `os.replace` trên Drive FUSE có thể không nguyên tử thật sự | Chưa kiểm chứng; nếu nghi ngờ, ghi cục bộ rồi sao chép; `load_checkpoint` lỗi trên tệp hỏng thì chạy lại epoch cuối |
 | `last.pt` xoá khi hoàn tất; ghi thẳng lên Drive mỗi epoch | Đề xuất. Nếu thời gian ghi `last.pt` (khoảng 1,3 GB với BERT) chiếm phần đáng kể của một epoch thì ghi cục bộ rồi sao chép sang Drive; quyết định sau khi đo ở Tuần 1 |
 | Tiếp tục tái lập đến mức từng epoch, không từng bit | Hạn chế đã biết: trạng thái ngẫu nhiên của dropout không được lưu, nên dropout sau điểm tiếp tục khác chạy liền; cuDNN trên GPU không đảm bảo xác định từng bit. Chạy tái lập chính xác chỉ được đảm bảo trên CPU với dropout bằng 0 |
 | Mỗi mô hình huấn luyện một lần (một seed) | Hạn chế đã biết, nêu trong báo cáo (`docs/02_evaluation.md` mục 2.6) |
 | `inference_seconds` đo cả nạp dữ liệu và token hoá | Đề xuất, đo giống nhau cho mọi mô hình |
 | Gradient accumulation, tốc độ học riêng cho head, đóng băng một phần backbone | Chưa làm |
-| Các giả định về hành vi của `torch` (nạp checkpoint bằng `weights_only=True`, trạng thái của lịch và `GradScaler` chỉ gồm kiểu cơ bản) | Chưa chạy thử khi soạn tài liệu; test U3 và F2 kiểm chứng ở lần chạy đầu |
+| Các giả định về hành vi của `torch`/`transformers` (nạp checkpoint bằng `weights_only=True`, trạng thái của lịch và `GradScaler` chỉ gồm kiểu cơ bản, `AutoConfig.for_model` dựng lại được cấu hình từ `dict`, `get_scale()` giảm khi bước bị bỏ) | Chưa chạy thử khi soạn tài liệu; test U3 và F2 kiểm chứng ở lần chạy đầu |
