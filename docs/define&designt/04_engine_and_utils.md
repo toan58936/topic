@@ -424,10 +424,10 @@ collect_summary_inputs(model_runs, results_dir) -> dict
 ```python
 {"param_counts": {model: n_params}, "train_seconds": {model: ...},
  "inference_seconds": {model: ...}, "rmse_raw_by_model": {model: ...},
- "device_by_model": {model: "cpu" | tên GPU}}   # lấy từ meta dự đoán
+ "seconds_per_epoch": {model: ...}, "split_id": str}   # lấy từ meta dự đoán và run_meta
 ```
 
-đúng các tham số của `build_model_summary` (`docs/02_evaluation.md` mục 2.7). Dòng baseline do notebook tự bổ sung vào các từ điển này (`fit_seconds` của baseline làm `train_seconds`, `"cpu"` làm thiết bị, số tham số để trống, `rmse_raw` tính từ điểm Ridge chưa clip hoặc để trống).
+đúng các tham số của `build_model_summary` (`docs/02_evaluation.md` mục 2.7). Dòng baseline do notebook tự bổ sung vào các từ điển này (`fit_seconds` của baseline làm `train_seconds`, `seconds_per_epoch` và `params_total` để trống, `rmse_raw` tính từ điểm Ridge chưa clip hoặc để trống, `split_id` từ `run_meta`).
 
 ### 2.8. Cấu trúc file trên Drive
 

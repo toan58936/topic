@@ -53,8 +53,8 @@ Mục tiêu:
 | FR-1 | Đọc `review.json` theo khối, không nạp cả file vào bộ nhớ. |
 | FR-2 | Lấy mẫu `n_samples` review sao cho tỉ lệ từng mức sao xấp xỉ tỉ lệ trong cả file. |
 | FR-3 | Chia mẫu thành Train/Val/Test theo `ratios`, **phân tầng theo sao**, tái lập 100% theo `seed`. |
-| FR-4 | Làm sạch review (bỏ `text` rỗng, chuẩn hoá khoảng trắng) trước khi lấy mẫu. |
-| FR-5 | Ghi ba file `parquet` có cùng cột; ghi `split_stats.json` gồm số mẫu mỗi tập, số mẫu theo từng mức sao ở mỗi tập (`stars_per_split`), hạn ngạch kỳ vọng của từng mức sao ở mỗi tập (`quota`), và tỉ lệ `user_id`, `business_id` của Test xuất hiện trong Train. |
+| FR-4 | Làm sạch review trước khi lấy mẫu: (1) bỏ `text` rỗng hoặc chỉ whitespace; (2) **chuẩn hoá văn bản**: `unicodedata.normalize('NFC', text.strip().lower())` rồi `collapse whitespace` (thay nhiều space/tab/newline liên tiếp bằng 1 space); văn bản đã chuẩn hoá dùng cho lấy mẫu, chia tập, **và so sánh trùng lặp** giữa Train/Val/Test. |
+| FR-5 | Ghi ba file `parquet` có cùng cột; ghi `split_stats.json` gồm `split_id`, `seed`, `data_version`, số mẫu mỗi tập, số mẫu theo từng mức sao ở mỗi tập (`stars_per_split`), phân phối sao gốc (`stars_distribution_original`), số review trùng văn bản bị loại ở Val/Test (`duplicate_text_removed`), và tỉ lệ `user_id`, `business_id` của Test xuất hiện trong Train (`user_id_overlap_rate`, `business_id_overlap_rate`). |
 | FR-6 | Không tự ghi đè ba file đã có, trừ khi người dùng yêu cầu `overwrite=True`. |
 | FR-7 | `create_dataloaders` nhận tokenizer từ bên ngoài, trả về ba `DataLoader`; `shuffle=True` chỉ cho Train. |
 | FR-8 | Mỗi mẫu mang `review_id`; nhãn là `float32` giữ nguyên thang 1.0-5.0, không chuẩn hoá. |
@@ -161,6 +161,59 @@ src/data_setup.py ──► train.parquet, val.parquet, test.parquet, split_stat
 **Với dữ liệu thật:** mỗi tập có xấp xỉ `42,000 / 9,000 / 9,000` review; tổng từng tập có thể lệch vài mẫu do phần dư ở các mức sao.
 
 **Tính độc lập với seed toàn cục:** hàm dùng bộ sinh riêng nên kết quả chia **không phụ thuộc** trạng thái bộ sinh số ngẫu nhiên toàn cục.
+
+### `split_stats.json` Schema
+
+```json
+{
+  "split_id": "a1b2c3d4e5f6",
+  "seed": 42,
+  "data_version": "yelp_2024_01_a1b2c3d4",
+  "n_samples": 60000,
+  "train_size": 42000,
+  "val_size": 9000,
+  "test_size": 9000,
+  "stars_per_split": {"train": {"1": ..., "2": ..., "3": ..., "4": ..., "5": ...}, "val": {...}, "test": {...}},
+  "stars_distribution_original": {"1": ..., "2": ..., "3": ..., "4": ..., "5": ...},
+  "duplicate_text_removed": {"val": N, "test": N},
+  "user_id_overlap_rate": {"train_val": 0.xx, "train_test": 0.xx},
+  "business_id_overlap_rate": {"train_val": 0.xx, "train_test": 0.xx},
+  "created_at": "2026-11-09T03:15:00Z"
+}
+```
+
+* `split_id`: 12 ký tự đầu sha256 trên danh sách `review_id` Test đã sắp xếp.
+* `data_version`: format `yelp_YYYY_MM_<sha8>` (hash 8 ký tự đầu của file `review.json` gốc).
+
+### Helper Function — `_allocate_counts`
+
+**Chữ ký:**
+```python
+def _allocate_counts(total: int, weights: list[float]) -> list[int]:
+    """
+    Phân bổ `total` samples theo trọng số `weights` (tổng weights = 1.0).
+    Trả về list[int] độ dài = len(weights), tổng = total.
+    
+    Quy tắc:
+    1. q_i = total * weights[i]
+    2. m_i = floor(q_i)
+    3. remainder = total - sum(m_i)
+    4. Sắp xếp index theo (q_i - m_i) giảm dần, tie-break: index nhỏ hơn ưu tiên
+    5. Cộng 1 cho `remainder` index đầu tiên
+    """
+```
+
+**Ví dụ:**
+```python
+# total=10, weights=[0.7, 0.15, 0.15]
+# q = [7.0, 1.5, 1.5], m = [7, 1, 1], sum=9, remainder=1
+# phần lẻ: [0.0, 0.5, 0.5] → index 1, 2 tie → ưu tiên index 1
+# kết quả: [7, 2, 1]
+```
+
+**Dùng ở 2 chỗ:**
+1. Bước 2: Phân bổ `n_samples` cho 5 mức sao (weights = tỷ lệ sao trong dữ liệu gốc)
+2. Bước 4: Phân bổ `m_c` review của mỗi mức sao cho Train/Val/Test (weights = ratios)
 
 **Định dạng ba file `parquet`:**
 
