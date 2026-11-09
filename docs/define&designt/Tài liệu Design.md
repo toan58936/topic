@@ -22,9 +22,26 @@ Lý do chọn Mean pooling: dùng thông tin của mọi token thật thay vì p
 
 | Module | Nhiệm vụ |
 | --- | --- |
-| `data_setup.py` | Hai hàm tách riêng. `prepare_splits()` chạy một lần: đọc `review.json` theo khối, làm sạch (bỏ review rỗng, chuẩn hoá khoảng trắng), lấy mẫu phân tầng theo sao 60.000 review giữ phân phối sao tự nhiên, chia phân tầng 70/15/15, loại khỏi val và test review có văn bản trùng khớp với train, lưu `train.parquet`, `val.parquet`, `test.parquet` và `split_stats.json` lên Drive. `split_stats.json` gồm `n_samples`, `seed`, `stars_per_split`, tỉ lệ review Test có `user_id` hoặc `business_id` xuất hiện trong Train, số review bị loại do trùng văn bản, và `split_id` (12 ký tự đầu của sha256 trên danh sách `review_id` Test đã sắp xếp). `create_dataloaders()` chạy ở mọi phiên huấn luyện: đọc ba file đã chia, nhận tokenizer từ bên ngoài, tokenize với cắt và đệm cố định ở 256 token, tạo Dataset và DataLoader (nhãn float32, mỗi mẫu mang `review_id`) |
+| `data_setup.py` | Hai hàm tách riêng. `prepare_splits()` chạy một lần: đọc `review.json` theo khối, làm sạch (bỏ review rỗng, chuẩn hoá khoảng trắng), lấy mẫu phân tầng theo sao 60.000 review giữ phân phối sao tự nhiên, chia phân tầng 70/15/15, loại khỏi val và test review có văn bản trùng khớp với train, lưu `train.parquet`, `val.parquet`, `test.parquet` và `split_stats.json` lên Drive. **Trùng văn bản**: chuẩn hoá bằng `lowercase + strip + collapse whitespace + NFC normalize` trước khi so sánh. `split_stats.json` schema đầy đủ:
+```json
+{
+  "split_id": "a1b2c3d4e5f6",
+  "seed": 42,
+  "n_samples": 60000,
+  "train_size": 42000,
+  "val_size": 9000,
+  "test_size": 9000,
+  "stars_per_split": {"train": {"1": ..., "2": ..., "3": ..., "4": ..., "5": ...}, "val": {...}, "test": {...}},
+  "stars_distribution_original": {"1": ..., "2": ..., "3": ..., "4": ..., "5": ...},
+  "duplicate_text_removed": {"val": N, "test": N},
+  "user_id_overlap_rate": {"train_val": 0.xx, "train_test": 0.xx},
+  "business_id_overlap_rate": {"train_val": 0.xx, "train_test": 0.xx},
+  "created_at": "2026-11-09T03:15:00Z"
+}
+```
+`split_id` = 12 ký tự đầu sha256 trên danh sách `review_id` Test đã sắp xếp. `create_dataloaders()` chạy ở mọi phiên huấn luyện: đọc ba file đã chia, nhận tokenizer từ bên ngoài, tokenize với cắt và đệm cố định ở 256 token, tạo Dataset và DataLoader (nhãn float32, mỗi mẫu mang `review_id`) |
 | `metrics.py` | Nguồn duy nhất của phép clip về 1.0-5.0 (`clip_scores`) và của mọi công thức chỉ số: MAE, RMSE, R², Pearson, Spearman toàn cục; MAE/RMSE theo từng mức sao kèm số mẫu n và Macro-MAE; `rmse_raw`; mốc dự đoán trung bình Train; lập và ghi `model_summary.csv`. Mở rộng tuỳ chọn: `paired_bootstrap` ghi `paired_comparison.csv`. Không import `torch`, và `src/__init__.py` để trống, để dashboard chạy được trên máy không cài PyTorch |
-| `baseline.py` | TF-IDF + Ridge; chỉ học trên Train, chọn siêu tham số (`max_features`, `ngram_range`, `alpha`) bằng RMSE Val, hàm huấn luyện không nhận tập Test; lưu và nạp pipeline bằng `joblib`; ghi dự đoán Val và Test của baseline vào `results/preds/` |
+| `baseline.py` | TF-IDF + Ridge; chỉ học trên Train, chọn siêu tham số bằng RMSE Val trên grid cố định, hàm huấn luyện không nhận tập Test; lưu và nạp pipeline bằng `joblib`; ghi dự đoán Val và Test của baseline vào `results/preds/`. **Grid:** `max_features` ∈ [5000, 10000, 20000], `ngram_range` ∈ [(1,1), (1,2)], `min_df` ∈ [2, 5], `max_df` = 0.95, `sublinear_tf` = True, `alpha` ∈ logspace(-3, 3, 7), `solver` = "auto". **Val set cố định** từ `data_setup.py` (không k-fold). `random_state` = 42. Output: `pipeline`, `best_params`, `grid_results` (cột `val_rmse`), `fit_seconds`, `grid_seconds`. |
 | `model_builder.py` | Dựng backbone theo bảng `BACKBONES` (bỏ lớp pooler), Mean pooling có `attention_mask`, dropout 0.1, Linear head (768 xuống 1) có bias khởi tạo bằng trung bình nhãn Train (`output_bias_init`, như nhau cho ba backbone), đầu ra squeeze về `(batch,)`; `build_tokenizer` (tokenizer đúng cặp backbone); `count_parameters`; hai tên `model.backbone` và `model.head` là một phần giao diện |
 | `utils.py` | Cố định seed; lưu checkpoint nguyên tử và nạp bằng `weights_only=True` |
 | `engine.py` | Vòng huấn luyện và kiểm định, Huber (mặc định) hoặc MSE, `fp16`, ép đầu ra `.float()` trước khi tính loss; lưu checkpoint mỗi epoch kèm cấu hình (`backbone`, `pooling`, `dropout`); ghi lịch sử huấn luyện mỗi lần chạy (epoch, loss train, RMSE và MAE Val, giây mỗi epoch) |
@@ -40,6 +57,7 @@ Mỗi nhóm module có một file đặc tả riêng trong `docs/`, kèm file ki
 | 3 | `docs/03_model.md` | `model_builder.py` | `docs/03_model_tests.md` |
 | 4 | `docs/04_engine_and_utils.md` | `utils.py`, `engine.py`, `train.py`, `predict.py` | `docs/04_engine_and_utils_tests.md` |
 | 5 | `docs/05_dashboard.md` | `app/streamlit_dashboard.py` | `docs/05_dashboard_tests.md` |
+| 6 | `docs/06_integration_test.md` | `tests/test_integration.py`, `scripts/validate_outputs.py` | `docs/06_integration_test_tests.md` |
 
 Quy tắc đi kèm: số thứ tự file là thứ tự viết, và một file đặc tả chỉ được phụ thuộc vào chữ ký hàm (import) của các file có số nhỏ hơn, nên không có tham chiếu vòng. Ngoại lệ chỉ ở mức tham số truyền vào: `create_dataloaders` nhận tokenizer từ bên ngoài và `utils.set_seed` được gọi từ notebook, nên `01_data.md` không import `model_builder.py` hay `utils.py`; các mục "Phụ thuộc" trong `01_data.md` chỉ là ngữ cảnh tham khảo.
 
@@ -49,11 +67,12 @@ Trên GitHub (repo riêng tư):
 
 ```
 project/
-├── docs/               # define.md, design.md, 01_data.md ... 05_dashboard.md, các file *_tests.md, ai_log.md
+├── docs/               # define.md, design.md, 01_data.md ... 06_integration_test.md, các file *_tests.md, ai_log.md
 ├── src/      # 8 module ở mục 2; __init__.py để trống (để metrics.py nhập được khi không có torch)
 ├── tests/              # pytest chạy trên CPU (mục 8); fixtures/ chứa dữ liệu tổng hợp, không có review thật
 ├── configs/            # cấu hình mỗi lần chạy (backbone, pooling, loss, seed, siêu tham số) và cấu hình smoke test
 ├── notebooks/          # colab_runner.ipynb (huấn luyện, đánh giá, xuất kết quả)
+├── scripts/            # validate_outputs.py, sync_results.sh
 ├── app/                # streamlit_dashboard.py, requirements.txt (streamlit, pandas, numpy, scipy; không cài torch)
 ├── reports/            # test_predictions.csv (KHÔNG có cột text, được commit), model_summary.csv (được commit),
 │                       # test_predictions_with_text.csv (sao chép từ Drive, bị .gitignore), biểu đồ
@@ -80,9 +99,9 @@ drive/project/
 4. `create_dataloaders()` đọc ba file, tokenize, cắt và đệm cố định ở 256 token.
 5. Huấn luyện từng mô hình, lưu checkpoint lên Drive sau mỗi epoch và ghi lịch sử huấn luyện. Mọi so sánh và quyết định trong Tuần 1 và Tuần 2 dùng Val.
 6. Sau lần chạy cuối của mọi mô hình, `predict.py` dự đoán Test một lần cho từng mô hình và baseline, lưu vào `results/preds/`. Khi gộp, ghép theo `review_id` và dừng nếu `split_id`, tập `review_id` hoặc `true_stars` không khớp giữa các file. Xuất lên `results/` trên Drive:
-   - `test_predictions.csv`: `review_id`, `true_stars`, `n_tokens`, các cột `pred_baseline`, `pred_bert`, `pred_distilbert`, `pred_roberta` (mô hình nào có kết quả thì có cột), rồi các cột `abs_err_*` tương ứng; không có `text`. Các cột `pred_*` đã clip về 1.0-5.0 nên `abs_err_*` tính trên điểm đã clip.
+   - `test_predictions.csv`: `review_id`, `true_stars`, `n_tokens`, `split_id`, các cột `pred_baseline`, `pred_bert`, `pred_distilbert`, `pred_roberta` (mô hình nào có kết quả thì có cột), rồi các cột `abs_err_*` tương ứng; không có `text`. Các cột `pred_*` đã clip về 1.0-5.0 nên `abs_err_*` tính trên điểm đã clip.
    - `test_predictions_with_text.csv`: các cột trên cộng thêm `text`, lấy bằng cách nối `review_id` với `test.parquet`.
-   - `model_summary.csv`: một dòng mỗi mô hình theo thứ tự `mean_predictor`, `baseline`, `bert`, `distilbert`, `roberta`; cột `model`, `mae`, `rmse`, `rmse_raw`, `r2`, `pearson`, `spearman`, `macro_mae`, `train_seconds`, `seconds_per_epoch`, `params_total`, `rmse_reduction_vs_baseline_pct`, `split_id`. Ô không áp dụng để trống (ví dụ `train_seconds` và hai chỉ số tương quan của `mean_predictor`). Điểm thô không lưu trong CSV dự đoán; `rmse_raw` được tính ngay lúc đánh giá.
+   - `model_summary.csv`: một dòng mỗi mô hình theo thứ tự `mean_predictor`, `baseline`, `bert`, `distilbert`, `roberta`; cột `model`, `mae`, `rmse`, `rmse_raw`, `r2`, `pearson`, `spearman`, `macro_mae`, `train_seconds`, `seconds_per_epoch`, `params_total`, `rmse_reduction_vs_baseline_pct`, `inference_seconds`, `split_id`. Ô không áp dụng để trống (ví dụ `train_seconds` và hai chỉ số tương quan của `mean_predictor`; `seconds_per_epoch` của `baseline`; dòng model thiếu để trống toàn bộ trừ `model` và `split_id`). Điểm thô không lưu trong CSV dự đoán; `rmse_raw` được tính ngay lúc đánh giá.
    - Kết quả Val (so Huber với MSE, giây mỗi epoch) nằm trong lịch sử huấn luyện do `engine.py` ghi, không nằm trong `model_summary.csv`.
 7. Một lần sau lần chạy cuối: tải `test_predictions.csv` và `model_summary.csv` từ Drive, commit vào `reports/` của repo riêng tư. Dashboard đọc hai file này, không cần GPU hay nạp mô hình. Bản `test_predictions_with_text.csv` sao chép thêm từ Drive khi cần xem nội dung review; file này bị `.gitignore`, không bao giờ lên GitHub.
 
@@ -195,6 +214,7 @@ Kết hợp GitHub riêng tư và sao chép từ Drive. Quy ước:
 | `grad_clip`, `dropout` | `1.0`, `0.1` (trước Linear head) |
 | Đệm và cắt | Cố định ở 256 token |
 | Độ chính xác | `fp16` (autocast), đầu ra ép `.float()` trước loss |
+| Gradient checkpointing | Tắt mặc định (`False`); chỉ bật nếu gặp OOM trên Colab |
 | Chọn checkpoint | RMSE Val thấp nhất (điểm đã clip) |
 | Seed | `42`, gọi `set_seed` ngay trước `build_model` |
 | Khởi tạo bias của head | Trung bình nhãn Train |
@@ -209,3 +229,149 @@ Thứ tự 01 → 02 → 03 → 04 → 05 theo mục 2, mỗi file ứng với m
 - **Cột chi phí:** `train_seconds` là tổng thời gian huấn luyện gồm lượt kiểm định Val, không gồm nạp dữ liệu và tokenize; `seconds_per_epoch` là trung bình mỗi epoch; `params_total` do `count_parameters` tính. Baseline đo trên CPU, `train_seconds` là thời gian fit của tổ hợp thắng và số tham số là số hệ số Ridge.
 - **`rmse_reduction_vs_baseline_pct`:** 100 × (RMSE baseline − RMSE mô hình) / RMSE baseline, tính trên Test.
 - **`n_tokens`:** số token của review khi không cắt, theo tokenizer của BERT, dùng chung làm số đo độ dài cho ba backbone; review bị cắt khi `n_tokens` lớn hơn 254.
+
+### 9.6 Cấu hình Baseline TF-IDF + Ridge
+
+| Tham số | Giá trị / Grid |
+| --- | --- |
+| `max_features` | `[5000, 10000, 20000]` |
+| `ngram_range` | `[(1, 1), (1, 2)]` |
+| `min_df` | `[2, 5]` |
+| `max_df` | `0.95` |
+| `sublinear_tf` | `True` (fixed) |
+| `lowercase` | `True` (default sklearn) |
+| `stop_words` | `None` (không dùng stopword list, dùng `max_df`) |
+| `alpha` (Ridge) | `logspace(-3, 3, 7)` = `[0.001, 0.01, 0.1, 1, 10, 100, 1000]` |
+| `solver` | `"auto"` (fixed) |
+| CV / Val | **Val set cố định** từ `data_setup.py` (không k-fold) |
+| `random_state` | `42` |
+| Tổng tổ hợp | 3 × 2 × 2 × 1 × 1 × 1 × 7 × 1 = **84** |
+| Output cần | `pipeline`, `best_params`, `grid_results` (cột `val_rmse`), `fit_seconds`, `grid_seconds` |
+
+### 9.7 Cấu hình Chia Dữ Liệu & Đánh Giá Quy Mô
+
+| Thành phần | Giá trị / Quyết định | Ghi chú |
+| --- | --- | --- |
+| Nguồn dữ liệu | Yelp `review.json` (Kaggle) | 60k sample stratified |
+| Quy mô mẫu | **60,000** review | Cân bằng Colab time vs metric stability |
+| Tỷ lệ chia | **70 / 15 / 15** | Train 42k, Val 9k, Test 9k |
+| Stratify | Theo `stars` (1-5) | Giữ phân phối tự nhiên |
+| Seed | `42` | Reproducible toàn project |
+| `max_length` | **256 token** | Fixed cho cả 3 backbone, không ablation |
+| Trùng text val/test vs train | Loại bỏ | Chuẩn hoá: `lowercase + strip + collapse whitespace + NFC` |
+| `split_id` | sha256(sorted test review_ids)[:12] | Kiểm tra trộn kết quả (merge validation) |
+| Overwrite guard | `FileExistsError` nếu chạy lại không `--overwrite` | Tránh ghi đè âm thầm |
+
+**Đánh giá quy mô 60k 70/15/15:**
+- Train 42k: Đủ fine-tune BERT-base (110M params) trên Colab 3 epochs
+- Val 9k: RMSE stable (SE ~0.008), đủ grid search baseline (84 combos) + so sánh 3 backbone
+- Test 9k: CI 95% ~±0.016 cho MAE/RMSE; per-star n≥300 (sao 1) → Macro-MAE có ngữ cảnh
+- So sánh benchmark: STS-B regression chỉ 5.7k train → 42k **đủ lớn**
+- Rủi ro: Sao 1-2 ít mẫu → báo cáo kèm `n` per star (đã yêu cầu ở Define)
+
+### 9.8 Cấu hình Checkpoint & Resume (Minimal)
+
+| Thành phần | Giá trị / Quyết định | Ghi chú |
+| --- | --- | --- |
+| **Lưu mỗi epoch** | `epoch_{N}.pt` chứa: `model_state_dict`, `optimizer_state_dict`, `scheduler_state_dict`, `rng_state` (torch/numpy/random), `epoch`, `best_val_rmse`, `backbone_config`, `run_config` | Đủ để resume chính xác |
+| **Write** | `torch.save()` thường (không atomic) | Course project: crash hiếm, đơn giản ưu tiên |
+| **Best model** | `best_model.pt` = copy của epoch có RMSE Val thấp nhất (đã clip) | Selection: RMSE Val clip |
+| **Resume mode** | `auto` (mặc định) = latest epoch | Chỉ 1 mode, đơn giản |
+| **Batch-level resume** | **Không hỗ trợ** | Chấp nhận mất ≤1 epoch |
+| **Config snapshot** | `config.yaml` + `history.csv` trong folder checkpoint | Dùng cho `load_trained_model` không cần mạng |
+| **Checkpoint folder** | `drive/project/checkpoints/<model_name>/` | Theo §4 Drive structure |
+
+**Lý do simplify:** Course project — atomic write, multi-resume modes, val_history là over-engineering. `torch.save()` + `auto` resume đủ an toàn.
+
+### 9.9 Cấu hình Output Schemas (CSV)
+
+#### 9.9.1 `test_predictions.csv`
+
+| Cột | Kiểu | Required | Ghi chú |
+| --- | --- | --- | --- |
+| `review_id` | string | ✅ | Primary key |
+| `true_stars` | int | ✅ | 1-5 |
+| `n_tokens` | int | ✅ | Tokenizer BERT, không cắt |
+| `split_id` | string | ✅ | 12 chars, validation merge |
+| `pred_baseline` | float | ✅ | Clip 1.0-5.0 |
+| `pred_bert` | float | ⚠️ | Nếu có kết quả |
+| `pred_distilbert` | float | ⚠️ | Nếu có kết quả |
+| `pred_roberta` | float | ⚠️ | Nếu có kết quả |
+| `abs_err_baseline` | float | ✅ | \|true - pred\| |
+| `abs_err_bert` | float | ⚠️ | Nếu có |
+| `abs_err_distilbert` | float | ⚠️ | Nếu có |
+| `abs_err_roberta` | float | ⚠️ | Nếu có |
+
+#### 9.9.2 `test_predictions_with_text.csv`
+- Tất cả cột `test_predictions.csv` + `text` (sau `review_id`)
+- Không commit GitHub (`.gitignore`: `reports/*_with_text.csv`)
+
+#### 9.9.3 `model_summary.csv`
+
+| Cột | Kiểu | Required | Ghi chú |
+| --- | --- | --- | --- |
+| `model` | string | ✅ | mean_predictor/baseline/bert/distilbert/roberta |
+| `mae` | float | ✅ | Trống nếu model thiếu |
+| `rmse` | float | ✅ | Trống nếu model thiếu |
+| `rmse_raw` | float | ✅ | Trống nếu model thiếu |
+| `r2` | float | ✅ | Trống nếu model thiếu |
+| `pearson` | float | ✅ | Trống nếu model thiếu |
+| `spearman` | float | ✅ | Trống nếu model thiếu |
+| `macro_mae` | float | ✅ | Trống nếu model thiếu |
+| `train_seconds` | float | ✅ | Trống cho mean_predictor |
+| `seconds_per_epoch` | float | ✅ | Trống cho mean_predictor, baseline |
+| `params_total` | int | ✅ | Baseline = số hệ số Ridge |
+| `rmse_reduction_vs_baseline_pct` | float | ✅ | Trống cho mean_predictor, baseline |
+| `inference_seconds` | float | ✅ | Trống nếu model thiếu |
+| `split_id` | string | ✅ | |
+
+**Thứ tự dòng cố định**: mean_predictor → baseline → bert → distilbert → roberta  
+**Model thiếu**: dòng tồn tại, toàn bộ cột trống `""` (trừ `model`, `split_id`)
+
+#### 9.9.4 `paired_comparison.csv` (Mở rộng tuỳ chọn, sau Mốc 2)
+
+| Cột | Mô tả |
+| --- | --- |
+| `model_a` | Tên mô hình A |
+| `model_b` | Tên mô hình B |
+| `metric` | "mae" / "rmse" / "r2" |
+| `diff_observed` | Chênh lệch quan sát (A - B) |
+| `ci_lower` | CI 95% lower bound |
+| `ci_upper` | CI 95% upper bound |
+| `p_value` | p-value (paired bootstrap) |
+| `significant` | True/False (α=0.05) |
+
+#### 9.9.5 CSV Format chuẩn
+- Float precision: `%.6f`
+- No index: `index=False`
+- Encoding: `utf-8`
+- Header: luôn có
+- NaN → empty string `""` (pandas đọc thành NaN)
+
+### 9.10 Cấu hình Phân Tích Lỗi (Error Analysis)
+
+| Thành phần | Giá trị / Quyết định | Ghi chú |
+| --- | --- | --- |
+| **Model phân tích** | RMSE Test thấp nhất (tự động) | Objective, không chủ quan |
+| **Worst-case sample** | Top 20 `abs_err` của model trên | Sai số lớn nhất |
+| **Random sample** | Stratified 4/mức sao × 5 mức = 20 | Seed=42, đảm bảo cover mọi sao |
+| **Input file** | `test_predictions_with_text.csv` | Tự động tạo bởi `predict.py` |
+| **5 nhóm lỗi** | Nhãn nhiễu, Cảm xúc lẫn lộn, Bị cắt token, Mỉa mai, Khác | Criteria định nghĩa rõ (xem dưới) |
+| **Người thực hiện** | Thành viên E (Define §13) | Leader cross-check 10% |
+| **Output** | `reports/error_analysis.csv` + summary báo cáo | Schema: `review_id,model,abs_error,true_stars,pred,error_group,notes` |
+| **Ngưỡng cắt token** | `n_tokens > 254` | Đã trừ [CLS] [SEP] |
+
+**Criteria 5 nhóm lỗi:**
+| Nhóm | Định nghĩa |
+| --- | --- |
+| **Nhãn nhiễu** | Nội dung tích cực (good, great, love...) nhưng sao ≤2; hoặc tiêu cực (bad, terrible...) nhưng sao ≥4 |
+| **Cảm xúc lẫn lộn** | Có cả khen và chê, từ khóa chuyển tiếp: but, however, although, though |
+| **Bị cắt 256 token** | `n_tokens > 254` (cột có sẵn trong predictions) |
+| **Mỉa mai** | Ngữ nghĩa đảo ngược so với từ khóa, cần đọc hiểu context |
+| **Khác** | Không rơi 4 nhóm trên, ghi note cụ thể |
+
+**Workflow (Tuần 3, ~3h):**
+1. `python -m src.predict --create-with-text` → tạo `test_predictions_with_text.csv`
+2. `python -m src.metrics --sample-errors` → xuất 40 `review_id` ra `error_sample.csv`
+3. Thành viên E đọc 40 review, điền `error_group` vào spreadsheet
+4. `python -m src.metrics --summarize-errors` → tính % từng nhóm, ghi báo cáo

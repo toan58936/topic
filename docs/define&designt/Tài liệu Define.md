@@ -141,33 +141,38 @@ Tất cả mô hình được đo trên cùng một tập test cố định (`se
 
 ## 13. Kế hoạch, phân công và rủi ro
 
+**Chi tiết thứ tự triển khai, phase gate và Definition of Done xem:** `plans/implementation.md`
+
+### 13.1 Phân công mảng
+
 | Vai trò | Mảng phụ trách |
 | --- | --- |
-| Leader | Kiến trúc, review code và Pull Request, đối chiếu giấy phép Yelp, tổng hợp báo cáo |
+| Leader | Kiến trúc, review code và Pull Request, **chạy huấn luyện Colab (Phase 3–5)**, đối chiếu giấy phép Yelp, tổng hợp báo cáo, điều phối |
 | Thành viên A | Dữ liệu: `data_setup.py`, `split_stats.json`, đặc tả `01` |
 | Thành viên B | Đánh giá và baseline: `metrics.py`, `baseline.py`, đặc tả `02` |
 | Thành viên C | Mô hình: `model_builder.py`, đặc tả `03` |
-| Thành viên D | Huấn luyện: `utils.py`, `engine.py`, `train.py`, `predict.py`, đặc tả `04`; chạy huấn luyện trên Colab |
+| Thành viên D | Huấn luyện infra: `utils.py`, `engine.py`, `train.py`, `predict.py`, đặc tả `04` |
 | Thành viên E | Dashboard và phân tích lỗi: `app/streamlit_dashboard.py`, đặc tả `05` |
+| Thành viên F | Integration Test: test toàn bộ luồng end-to-end, validate pipeline outputs, đặc tả `06` |
 
 Mỗi người ghi `docs/ai_log.md` cho mảng của mình; Leader tổng hợp. Tên từng thành viên ghi trong README của repo.
 
-| Thời gian | Công việc | Mốc kiểm tra |
-| --- | --- | --- |
-| Tuần 1 | Dữ liệu và Baseline; Define, Design và khung code GitHub; chạy ngắn ước lượng tốc độ; huấn luyện đầy đủ BERT với Huber rồi MSE; áp dụng quy tắc chọn loss | Mốc 1: `split_stats.json`, kết quả Baseline và mốc trung bình trên Val, ngưỡng mục tiêu, `seconds_per_epoch`, kết quả Huber so với MSE và loss đã chốt |
-| Tuần 2 | Huấn luyện DistilBERT rồi RoBERTa với cùng thiết lập và loss đã chốt (BERT đã chạy ở Tuần 1); sau lần chạy cuối, xuất dự đoán Test một lần cho mọi mô hình | Mốc 2: bảng so sánh MAE, RMSE, R², tương quan trên Test và kiểm tra tiêu chí đạt |
-| Tuần 3 | Hoàn thiện dashboard, phân tích lỗi, tổng hợp nhật ký dùng AI, báo cáo; chừa 2 ngày đệm | Mốc 3: Dashboard và báo cáo |
+### 13.2 Mốc chính (Milestones)
+
+Xem chi tiết phase gate và timeline trong `plans/implementation.md` (Phase 0–6, Mốc 1/2/3 mapping ở Mục 3).
+
+### 13.3 Rủi ro chính & Cách xử lý
 
 | Rủi ro | Cách xử lý |
 | --- | --- |
-| Mất GPU hoặc ngắt phiên Colab | Bật `fp16`, lưu checkpoint lên Drive mỗi epoch |
-| Hết hạn mức GPU | Thứ tự chạy BERT, DistilBERT, RoBERTa; nếu không đủ thì bỏ trọn RoBERTa |
-| Dữ liệu lớn | Tải một lần, đọc theo khối, lấy mẫu phân tầng một lần |
-| Overfit | Theo dõi loss trên tập val |
-| Mô hình dồn dự đoán về giá trị trung bình do lệch nhãn | Xem chỉ số theo từng mức sao và độ lệch chuẩn của dự đoán |
-| Rò rỉ giữa train và test | Chia ngẫu nhiên phân tầng, loại review trùng văn bản, báo cáo mức trùng người dùng và doanh nghiệp |
-| So sánh không công bằng giữa các mô hình | Cùng dữ liệu, seed, thiết lập và ngân sách huấn luyện |
-| Trộn kết quả giữa các phiên chia hoặc phiên chạy | `split_id` ghi trong mỗi lần chạy; khi ghép dự đoán, dừng nếu `split_id` hoặc `review_id` không khớp |
+| Mất GPU hoặc ngắt phiên Colab | Bật `fp16`, lưu checkpoint lên Drive mỗi epoch, resume `auto` |
+| Hết hạn mức GPU | Thứ tự BERT → DistilBERT → RoBERTa; thiếu quota thì bỏ trọn RoBERTa |
+| Dữ liệu lớn / tải chậm | Tải một lần, đọc theo khối, stratified sample 60k một lần |
+| Overfit | Theo dõi loss Val; early stopping implicit qua checkpoint selection |
+| Mô hình dồn dự đoán về trung bình | Xem per-star MAE/RMSE, Macro-MAE, std dự đoán Val |
+| Rò rỉ train/test | Chia ngẫu nhiên phân tầng, loại trùng text Val/Test vs Train; báo cáo overlap user/business |
+| So sánh không công bằng | Cùng dữ liệu, seed, pooling, loss, ngân sách huấn luyện cho 3 backbone |
+| Trộn kết quả giữa các run | `split_id` trong config & predictions; merge validation dừng nếu mismatch |
 
 ## 14. Các quyết định đã chốt
 
