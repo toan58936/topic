@@ -1,7 +1,7 @@
 # Đặc tả Thiết kế Module Mô hình — `model_builder.py`
 
 > **Tài liệu:** `docs/03_model.md` (Define & Design cho mô hình hồi quy)
-> **Module liên quan:** `going_modular/model_builder.py`
+> **Module liên quan:** `src/model_builder.py`
 > **Kế hoạch kiểm thử:** `docs/03_model_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md` (mục 9), `docs/design.md`; `docs/01_data.md` (chỉ về dạng đầu vào `input_ids`, `attention_mask` shape `[B, 256]`; không import `data_setup.py`)
 > **Dùng bởi:** `docs/04_engine_and_utils.md` (`engine.py`, `train.py`, `predict.py`); `docs/02_evaluation.md` nhận số tham số từ `count_parameters` qua nơi gọi (`metrics.py` không import module này)
@@ -78,7 +78,7 @@ Việc clip về 1.0-5.0 không nằm trong mô hình: huấn luyện (Huber ho�
 * Cả ba backbone dùng cùng bước gộp, cùng dropout, cùng head, cùng loss, cùng seed và cùng ngân sách huấn luyện.
 * Dropout trước head mặc định `0.1` (đề xuất, bằng dropout nội bộ của BERT); dropout bên trong backbone giữ mặc định của từng checkpoint.
 * Đầu vào tối đa 256 token, nhỏ hơn giới hạn vị trí của backbone (512 với BERT và DistilBERT, 514 với RoBERTa).
-* `model_builder.py` không import module nào khác trong `going_modular/`. Ngược lại, `metrics.py` không import `model_builder.py` (để dashboard không cần `torch`); số tham số do nơi gọi chuyển sang.
+* `model_builder.py` không import module nào khác trong `src/`. Ngược lại, `metrics.py` không import `model_builder.py` (để dashboard không cần `torch`); số tham số do nơi gọi chuyển sang.
 * Phụ thuộc `torch` và `transformers`; cả hai nên được ghi phiên bản cố định trong `requirements.txt` (đề xuất), vì hành vi của `AutoModel` với lớp pooler thay đổi giữa các phiên bản.
 
 ### 1.5. Tiêu chí chấp nhận
@@ -101,7 +101,7 @@ Việc clip về 1.0-5.0 không nằm trong mô hình: huấn luyện (Huber ho�
 configs/*  (backbone, pooling, dropout, ...)
       │
       ▼
-going_modular/model_builder.py
+src/model_builder.py
       ├── build_tokenizer ──► tokenizer ──► data_setup.create_dataloaders   (01)
       ├── build_model ──► TextRegressor ──► engine.py  (huấn luyện: loss Huber/MSE, fp16)
       │                              └──► predict.py (suy luận, rồi clip_scores của metrics.py)   (04)

@@ -1,7 +1,7 @@
 # Đặc tả Thiết kế Module Đánh giá — `metrics.py` và `baseline.py`
 
 > **Tài liệu:** `docs/02_evaluation.md` (Define & Design cho chỉ số đánh giá và baseline)
-> **Module liên quan:** `going_modular/metrics.py`, `going_modular/baseline.py`
+> **Module liên quan:** `src/metrics.py`, `src/baseline.py`
 > **Kế hoạch kiểm thử:** `docs/02_evaluation_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md`, `docs/design.md`; `docs/01_data.md` (chỉ về định dạng ba file `parquet`, không import `data_setup.py`)
 > **Dùng bởi:** `docs/03_model.md` (không), `docs/04_engine_and_utils.md` (`clip_scores`, `rmse`, `build_model_summary`), dashboard (`docs/05_dashboard.md` — đề xuất, chưa viết)
@@ -45,7 +45,7 @@ Mục tiêu:
 | **Đầu vào của `metrics.py`** | Mảng nhãn thật và điểm dự đoán; bảng dự đoán Test (`true_stars`, `pred_<mô hình>`); số tham số, thời gian huấn luyện và `rmse_raw` do nơi gọi truyền vào |
 | **Đầu ra của `metrics.py`** | Từ điển chỉ số; `DataFrame` và file `model_summary.csv` |
 | **Đầu vào của `baseline.py`** | `DataFrame` Train và Val đọc từ `parquet` (cột `text`, `stars`), lưới siêu tham số, `seed` |
-| **Đầu ra của `baseline.py`** | Từ điển gồm pipeline đã huấn luyện, bảng kết quả lưới trên Val, siêu tham số tốt nhất và thời gian huấn luyện; dự đoán là mảng số thực đã clip |
+| **Đầu ra của `baseline.py`** | Từ điển gồm pipeline đã huấn luyện, bảng kết quả lưới trên Val, siêu tham số tốt nhất và thời gian huấn luyện; dự đoán là mảng số thực đã clip; file `baseline.joblib` do `save_baseline` ghi |
 
 ### 1.3. Yêu cầu chức năng
 
@@ -55,18 +55,19 @@ Mục tiêu:
 | FR-2 | `compute_metrics` trả về MAE, RMSE, R², Pearson, Spearman tính trên điểm đã clip, kèm `rmse_raw` tính trên điểm chưa clip. |
 | FR-3 | `rmse` và `mae` là hàm đơn giản dùng chung (cho `engine.py` chọn checkpoint, cho `baseline.py` chọn siêu tham số). |
 | FR-4 | `per_star_metrics` trả về MAE và RMSE theo từng mức sao có mặt và `macro_mae`. |
-| FR-5 | `bootstrap_ci` và `paired_bootstrap_diff` trả về khoảng tin cậy, tái lập theo `seed`. |
+| FR-5 | `bootstrap_ci` và `paired_bootstrap_diff` trả về khoảng tin cậy, tái lập theo `seed`; tham số `metric` thuộc `{"rmse", "mae"}`. |
 | FR-6 | `build_model_summary` lập bảng một dòng mỗi mô hình; `write_model_summary` ghi `model_summary.csv`, không ghi đè trừ khi `overwrite=True`. |
 | FR-7 | `metrics.py` chỉ dùng `numpy`, `pandas`, `scipy`; **không import `torch`**. |
 | FR-8 | `fit_baseline` chỉ huấn luyện trên Train, chọn siêu tham số trên Val bằng RMSE (qua `metrics.rmse`), **không nhận tập Test**. |
 | FR-9 | `predict_baseline` trả về điểm đã clip bằng `clip_scores`. |
 | FR-10 | `fit_baseline` đo thời gian huấn luyện lần fit cuối để đưa vào `model_summary.csv`. |
 | FR-11 | Kiểm tra đầu vào hợp lệ và báo `ValueError` rõ ràng. |
+| FR-12 | `save_baseline` và `load_baseline` lưu và nạp kết quả `fit_baseline` (pipeline, siêu tham số, thời gian), để tạo dự đoán Test của baseline ở Tuần 2 mà không phải huấn luyện lại. |
 
 ### 1.4. Ràng buộc
 
 * Điểm dự đoán luôn được clip về 1.0-5.0 trước khi tính chỉ số, áp dụng đồng nhất cho baseline và ba mô hình; `rmse_raw` được tính riêng từ điểm chưa clip để tham khảo.
-* `metrics.py` phải nhập được trên máy không có PyTorch (dashboard chạy trên máy cá nhân, `app/requirements.txt` không có `torch`). Vì vậy `going_modular/__init__.py` phải để trống hoặc rất nhẹ, không import các module khác.
+* `metrics.py` phải nhập được trên máy không có PyTorch (dashboard chạy trên máy cá nhân, `app/requirements.txt` không có `torch`). Vì vậy `src/__init__.py` phải để trống hoặc rất nhẹ, không import các module khác.
 * `metrics.py` không biết gì về mô hình: số tham số và thời gian do nơi gọi truyền vào.
 * Baseline dùng `scikit-learn` (`TfidfVectorizer`, `Ridge`); các thư viện `scikit-learn`, `scipy`, `pandas`, `pyarrow` cần ghi trong `requirements.txt`.
 * Baseline đọc cùng ba file `parquet` với mô hình chính (xem `docs/01_data.md`).
@@ -79,7 +80,7 @@ Mục tiêu:
 2. `per_star_metrics` và Macro-MAE đúng trên ví dụ tính tay; mức sao vắng mặt không làm hàm lỗi.
 3. `clip_scores` đúng giá trị và giữ nguyên kiểu; clip không làm tăng RMSE.
 4. `model_summary.csv` có đủ cột, đúng công thức (đặc biệt mức giảm so với baseline), không ghi đè âm thầm.
-5. `import going_modular.metrics` không kéo theo `torch`.
+5. `import src.metrics` không kéo theo `torch`.
 6. Baseline: lưới chọn theo RMSE Val thấp nhất, chữ ký không có Test, dự đoán nằm trong 1.0-5.0, tái lập theo `seed`, và học được tín hiệu (tốt hơn việc luôn đoán trung bình trên dữ liệu có quy luật).
 7. Bộ test trong `docs/02_evaluation_tests.md` đều đạt.
 
@@ -142,7 +143,8 @@ paired_bootstrap_diff(y_true, pred_a, pred_b, metric: str = "rmse", n_boot: int 
 
 build_model_summary(preds_df, models: list, rmse_raw_by_model: dict, param_counts: dict,
                     train_seconds: dict, inference_seconds: dict = None,
-                    baseline_name: str = "baseline", n_boot: int = 1000, seed: int = 42) -> DataFrame
+                    baseline_name: str = "baseline", n_boot: int = 1000, seed: int = 42,
+                    device_by_model: dict = None) -> DataFrame
 
 write_model_summary(summary_df, path, overwrite: bool = False) -> None
 ```
@@ -154,7 +156,10 @@ build_baseline(max_features: int = 50000, ngram_range: tuple = (1, 2),
                alpha: float = 1.0, seed: int = 42)         # sklearn Pipeline
 
 fit_baseline(train_df, val_df, param_grid: dict = None, seed: int = 42) -> dict
-# {"pipeline", "best_params", "grid_results" (DataFrame), "fit_seconds"}
+# {"pipeline", "best_params", "grid_results" (DataFrame), "fit_seconds", "grid_seconds"}
+
+save_baseline(result: dict, path: str, overwrite: bool = False) -> None   # joblib
+load_baseline(path: str) -> dict                                            # cùng khoá với fit_baseline
 
 predict_baseline(pipeline, texts) -> numpy.ndarray          # shape (N,), đã clip
 ```
@@ -170,9 +175,10 @@ $$R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}$$
 * **R²** có thể âm: khi mô hình tệ hơn việc luôn đoán giá trị trung bình $\bar{y}$.
 * **Pearson** đo quan hệ tuyến tính giữa $\hat{y}$ và $y$; **Spearman** là Pearson tính trên thứ hạng, đo quan hệ đơn điệu. Cả hai không phạt việc lệch một lượng cố định, nên cần đọc cùng MAE và RMSE.
 * Nếu dự đoán là hằng số (độ lệch chuẩn bằng 0), tương quan không xác định: trả về `NaN` thay vì báo lỗi.
+* Nếu **nhãn thật** là hằng số (mọi $y_i$ bằng nhau, ví dụ khi dashboard lọc ra một mức sao), $\sum_i (y_i - \bar{y})^2 = 0$: R² và cả hai tương quan không xác định, trả về `NaN` thay vì báo lỗi hay chia cho 0; MAE và RMSE vẫn tính bình thường.
 * `rmse_raw` dùng $\hat{y}$ chưa giới hạn, chỉ để tham khảo ảnh hưởng của việc clip.
 
-**Phép clip — `clip_scores`:** giới hạn mỗi giá trị về $[\text{low}, \text{high}]$ và trả về cùng kiểu với đầu vào. Hàm dùng phép chặn có sẵn của kiểu dữ liệu đó (ví dụ `numpy.clip`, hoặc `.clamp` nếu đầu vào là tensor, nhận biết qua thuộc tính) nên **không cần import `torch`**. Vì nhãn thật luôn nằm trong $[1, 5]$, clip không bao giờ làm tăng sai số của một mẫu.
+**Phép clip — `clip_scores`:** giới hạn mỗi giá trị về $[\text{low}, \text{high}]$ và trả về cùng kiểu với đầu vào. Hàm dùng phép chặn có sẵn của kiểu dữ liệu đó (ví dụ `numpy.clip`; nếu đầu vào không phải `numpy.ndarray`, danh sách hay `tuple` mà có thuộc tính `clamp` thì coi là tensor và gọi `.clamp(low, high)`) nên **không cần import `torch`**. Vì nhãn thật luôn nằm trong $[1, 5]$, clip không bao giờ làm tăng sai số của một mẫu.
 
 ### 2.5. Chỉ số theo từng mức sao và Macro-MAE
 
@@ -184,7 +190,7 @@ $$\text{Macro-MAE} = \frac{1}{|C|}\sum_{c \in C} \text{MAE}_c$$
 
 **Ví dụ.** $y = [1,1,3,5,5]$, $\hat{y} = [2,1,3,4,5]$: MAE theo sao là $0.5$ (sao 1), $0$ (sao 3), $0.5$ (sao 5); Macro-MAE $= 1/3 \approx 0.333$; MAE toàn cục $= 0.4$.
 
-Khi dữ liệu thiếu một mức sao (ví dụ dashboard lọc theo bộ lọc), hàm chỉ trả về các mức sao có mặt và Macro-MAE tính trên các mức đó.
+Khi dữ liệu thiếu một mức sao (ví dụ dashboard lọc theo bộ lọc), hàm chỉ trả về các mức sao có mặt và Macro-MAE tính trên các mức đó. Khoá của `per_star` là `int` 1-5. Nhãn thật phải là số nguyên trong $\{1,\dots,5\}$ (chấp nhận `3.0`, không chấp nhận `0`, `6`, `2.5`); ngược lại `ValueError`, để nhãn hỏng không bị bỏ qua âm thầm khỏi Macro-MAE.
 
 ### 2.6. Khoảng tin cậy bằng bootstrap
 
@@ -210,10 +216,11 @@ Khi dữ liệu thiếu một mức sao (ví dụ dashboard lọc theo bộ lọ
 | `models` | Danh sách tên theo thứ tự dòng, ví dụ `["baseline", "bert", "roberta", "distilbert"]` |
 | `rmse_raw_by_model` | `rmse_raw` của từng mô hình, tính lúc đánh giá từ điểm chưa clip (điểm thô không lưu trong CSV dự đoán) |
 | `param_counts` | Số tham số từng mô hình (baseline để trống) |
-| `train_seconds` | Thời gian huấn luyện từng mô hình (tổng `epoch_seconds`; với baseline là `fit_seconds`) |
+| `train_seconds` | Thời gian huấn luyện từng mô hình (tổng `epoch_seconds`, đã gồm kiểm định Val mỗi epoch; với baseline là `fit_seconds` của tổ hợp thắng, không gồm cả lưới). Hai số này **không cùng cơ sở**; báo cáo phải nêu rõ, và `grid_seconds` của baseline là số tham khảo cho chi phí chọn siêu tham số |
 | `inference_seconds` | Tuỳ chọn: thời gian suy luận trên cả tập Test của từng mô hình |
+| `device_by_model` | Tuỳ chọn: thiết bị đã chạy (ví dụ `"cpu"`, tên GPU) của từng mô hình, ghi vào cột `device` |
 
-**Các cột của `model_summary.csv`** (mỗi dòng một mô hình, baseline ở dòng đầu):
+**Các cột của `model_summary.csv`** (mỗi dòng một mô hình, baseline ở dòng đầu). **Thứ tự cột** đúng như sau: `model`, `mae`, `rmse`, `rmse_raw`, `r2`, `pearson`, `spearman`, `macro_mae`, `train_seconds`, `params_total`, `rmse_ci_low`, `rmse_ci_high`, `inference_seconds_per_1000`, `rmse_reduction_vs_baseline_pct`, `device`.
 
 | Cột | Ý nghĩa |
 | :--- | :--- |
@@ -222,6 +229,7 @@ Khi dữ liệu thiếu một mức sao (ví dụ dashboard lọc theo bộ lọ
 | `train_seconds`, `params_total` | Chi phí huấn luyện và kích thước mô hình |
 | `rmse_ci_low`, `rmse_ci_high` | Khoảng tin cậy bootstrap của RMSE (đề xuất) |
 | `inference_seconds_per_1000` | $\text{seconds} / N \times 1000$ nếu có `inference_seconds` (đề xuất) |
+| `device` | Thiết bị chạy huấn luyện và suy luận của mô hình (đề xuất); để trống nếu không truyền `device_by_model`. Cần vì suy luận baseline chạy CPU còn Transformer chạy GPU và gồm token hoá |
 | `rmse_reduction_vs_baseline_pct` | $100 \times (\text{RMSE}_{\text{baseline}} - \text{RMSE}_{\text{mô hình}}) / \text{RMSE}_{\text{baseline}}$; dòng baseline để trống (đề xuất) |
 
 Các cột ghi "đề xuất" là phần mở rộng so với danh sách trong `docs/design.md` mục 4; Design cần ghi nhận nếu nhóm giữ.
@@ -235,10 +243,12 @@ Các cột ghi "đề xuất" là phần mở rộng so với danh sách trong `
 1. **Dựng pipeline:** `TfidfVectorizer(max_features, ngram_range)` nối với `Ridge(alpha, random_state=seed)`.
 2. **Lưới siêu tham số (đề xuất):** `max_features` thuộc `{20000, 50000}`, `ngram_range` thuộc `{(1,1), (1,2)}`, `alpha` thuộc `{0.1, 1.0, 10.0}`; tổng 12 tổ hợp.
 3. **Chọn trên Val:** với từng tổ hợp, huấn luyện **chỉ trên Train**, dự đoán Val, clip, rồi tính `metrics.rmse`. Chọn tổ hợp có RMSE Val thấp nhất.
-4. **Kết quả:** pipeline đã huấn luyện trên Train với tổ hợp tốt nhất (không huấn luyện lại trên Train gộp Val, để giữ nguyên điều kiện so sánh với mô hình chính), bảng RMSE Val của mọi tổ hợp, siêu tham số tốt nhất và `fit_seconds` (thời gian của lần fit cuối).
+4. **Kết quả:** pipeline đã huấn luyện trên Train với tổ hợp tốt nhất (không huấn luyện lại trên Train gộp Val, để giữ nguyên điều kiện so sánh với mô hình chính), bảng `grid_results` (mỗi dòng một tổ hợp, cột `max_features`, `ngram_range`, `alpha`, `val_rmse`), siêu tham số tốt nhất `best_params` (cùng ba khoá), `fit_seconds` (thời gian fit của chính tổ hợp thắng) và `grid_seconds` (tổng thời gian fit mọi tổ hợp, gồm dự đoán Val). `fit_seconds` là số đưa vào `train_seconds` của baseline; `grid_seconds` chỉ để báo cáo chi phí thật của việc chọn siêu tham số.
 5. **Dự đoán:** `predict_baseline` trả về mảng số thực đã clip.
 
 **Vì sao không dùng Test để chọn siêu tham số:** nếu chọn theo điểm trên Test thì thông tin của Test lọt vào việc chọn mô hình (rò rỉ), điểm của baseline thành lạc quan giả, và phép so sánh với mô hình chính (chọn checkpoint bằng Val) không còn cùng điều kiện. Chữ ký `fit_baseline` không có tham số Test, nên điều này được đảm bảo ngay trong chữ ký.
+
+**Lưu và nạp — `save_baseline`, `load_baseline`:** `save_baseline` ghi bằng `joblib.dump` một `dict` gồm `pipeline`, `best_params`, `grid_results` (DataFrame), `fit_seconds`, `grid_seconds`; ghi nguyên tử (tệp tạm rồi đổi tên). `load_baseline` trả về cùng `dict`, nên `predict_baseline(load_baseline(p)["pipeline"], texts)` cho dự đoán giống hệt trước khi lưu. Tệp `joblib` là định dạng `pickle`: chỉ nạp tệp do chính nhóm tạo, không nạp tệp nhận từ nguồn lạ. Tệp nằm trên Drive, không đưa lên GitHub (thêm `*.joblib` vào `.gitignore`).
 
 **Tính tái lập:** cùng dữ liệu và cùng `seed` cho cùng kết quả.
 
@@ -248,10 +258,12 @@ Các cột ghi "đề xuất" là phần mở rộng so với danh sách trong `
 | :--- | :--- |
 | `clip_scores` | `ValueError` nếu `low > high` |
 | `compute_metrics`, `per_star_metrics`, `rmse`, `mae`, `bootstrap_*` | `ValueError` nếu độ dài `y_true` và `y_pred` khác nhau, mảng rỗng, hoặc có `NaN` trong đầu vào |
+| `per_star_metrics` | Thêm: `ValueError` nếu nhãn thật không phải số nguyên trong 1-5 |
 | `bootstrap_ci`, `paired_bootstrap_diff` | `ValueError` nếu `n_boot <= 0`, `alpha` ngoài $(0, 1)$, hoặc tên chỉ số không hỗ trợ |
 | `build_model_summary` | `ValueError` nếu thiếu cột `true_stars` hoặc `pred_<mô hình>`; hoặc `baseline_name` không nằm trong `models` |
 | `write_model_summary` | `FileExistsError` nếu file đã có và `overwrite=False` |
 | `fit_baseline` | `ValueError` nếu thiếu cột `text` hoặc `stars`, hoặc lưới rỗng |
+| `save_baseline`, `load_baseline` | `FileExistsError` nếu file đã có và `overwrite=False`; `FileNotFoundError` khi nạp file không có; `ValueError` nếu file nạp lên thiếu khoá của `fit_baseline` |
 | `predict_baseline` | `ValueError` nếu danh sách rỗng hoặc phần tử không phải chuỗi |
 
 ### 2.10. Tích hợp với các module khác

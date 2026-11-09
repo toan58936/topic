@@ -1,7 +1,7 @@
 # Đặc tả Thiết kế Module Dữ liệu — `data_setup.py`
 
 > **Tài liệu:** `docs/01_data.md` (Define & Design cho pipeline dữ liệu)
-> **Module liên quan:** `going_modular/data_setup.py`
+> **Module liên quan:** `src/data_setup.py`
 > **Kế hoạch kiểm thử:** `docs/01_data_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md`, `docs/design.md`; `docs/02_model.md` (tokenizer đi kèm backbone), `docs/03_engine_and_utils.md` (huấn luyện, seed) — hai tài liệu này chưa viết
 > **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
@@ -87,7 +87,7 @@ Mục tiêu:
 notebooks/colab_runner.ipynb
         │  chạy prepare_splits(...) một lần
         ▼
-going_modular/data_setup.py ──► train.parquet, val.parquet, test.parquet, split_stats.json  (Drive)
+src/data_setup.py ──► train.parquet, val.parquet, test.parquet, split_stats.json  (Drive)
         │
         │  mỗi phiên huấn luyện: create_dataloaders(data_dir, tokenizer, ...)
         ▼

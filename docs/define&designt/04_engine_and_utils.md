@@ -1,7 +1,7 @@
 # Đặc tả Thiết kế Module Huấn luyện, Suy luận và Tiện ích — `utils.py`, `engine.py`, `train.py`, `predict.py`
 
 > **Tài liệu:** `docs/04_engine_and_utils.md` (Define & Design cho huấn luyện, suy luận và tiện ích)
-> **Module liên quan:** `going_modular/utils.py`, `going_modular/engine.py`, `going_modular/train.py`, `going_modular/predict.py`
+> **Module liên quan:** `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py`
 > **Kế hoạch kiểm thử:** `docs/04_engine_and_utils_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md` (mục 9, 11, 12, 14), `docs/design.md`; `docs/01_data.md` (dạng batch, `create_dataloaders`, bộ sinh xáo trộn của `train_loader`); `docs/02_evaluation.md` (`rmse`, `mae`, `clip_scores`, đầu vào của `build_model_summary`); `docs/03_model.md` (`build_model`, `build_tokenizer`, `count_parameters`)
 > **Dùng bởi:** `notebooks/colab_runner.ipynb`; dashboard đọc kết quả do module này xuất (`docs/05_dashboard.md`, đề xuất, chưa viết)
@@ -72,7 +72,7 @@ Mục tiêu:
 | FR-15 | `load_config` áp mặc định, ép kiểu số (kể cả khi YAML đọc `2e-5` thành chuỗi), từ chối khoá lạ và giá trị không hợp lệ. |
 | FR-16 | `resolve_output_bias` đổi `output_bias_init: train_mean` thành trung bình nhãn Train (chỉ đọc cột `stars` của `train.parquet`). |
 | FR-17 | `run_training` thực hiện: `set_seed` rồi chọn thiết bị, tạo tokenizer và DataLoader, `build_model`, `fit`; ghi bản sao cấu hình. Cho phép truyền sẵn mô hình và DataLoader (dùng để kiểm thử). |
-| FR-18 | `train.py` chạy được bằng dòng lệnh: `python -m going_modular.train --config <file>`, có `--set khoá=giá_trị` để ghi đè và `--overwrite`, `--no-resume`. |
+| FR-18 | `train.py` chạy được bằng dòng lệnh: `python -m src.train --config <file>`, có `--set khoá=giá_trị` để ghi đè và `--overwrite`, `--no-resume`. |
 | FR-19 | `predict` nhận một chuỗi (trả về `float`) hoặc danh sách chuỗi (trả về mảng `numpy`), điểm đã clip về 1.0-5.0 theo mặc định; không để mô hình ở chế độ khác với lúc nhận. |
 | FR-20 | `load_trained_model` dựng lại mô hình từ `best_model.pt` và trả về mô hình ở chế độ `eval` kèm thông tin lần chạy. |
 | FR-21 | `export_test_predictions` chạy mô hình trên `test_loader` đúng một lần, ghi điểm thô và điểm đã clip, `rmse_raw`, thời gian suy luận; không ghi đè trừ khi `overwrite=True`. |
@@ -87,7 +87,7 @@ Mục tiêu:
 * Chọn checkpoint tốt nhất bằng RMSE trên **Val**, tính qua `metrics.rmse` trên điểm đã clip (theo `docs/02_evaluation.md` mục 2.10). Tập Test không bao giờ được dùng để chọn checkpoint, loss hay số epoch.
 * Điểm đầu ra của mô hình là điểm thô; clip chỉ áp dụng khi tính chỉ số và khi dự đoán, bằng `clip_scores` của `metrics.py`.
 * `engine.py` import `metrics.py` và `model_builder.py`; `predict.py` import thêm `data_setup.py` và `engine.py`; `train.py` import tất cả. Không có import theo chiều ngược lại (số thứ tự file tăng dần).
-* `going_modular/__init__.py` để trống (theo `docs/02_evaluation.md`), nên `python -m going_modular.train` chạy được từ thư mục gốc repo.
+* `src/__init__.py` để trống (theo `docs/02_evaluation.md`), nên `python -m src.train` chạy được từ thư mục gốc repo.
 * Checkpoint chỉ chứa tensor và kiểu cơ bản (`dict`, `list`, `str`, `int`, `float`, `bool`, `None`) để nạp được bằng `weights_only=True`; số `numpy` phải đổi sang kiểu Python trước khi lưu.
 * Thư viện: `torch`, `transformers` (lịch tốc độ học), `pyyaml`, `pandas`, `numpy`; ghi trong `requirements.txt`.
 * Một seed cho mỗi mô hình; tái lập đến mức từng epoch trên CPU, không đảm bảo từng bit trên GPU hay qua điểm tiếp tục (xem mục 2.11).
@@ -378,8 +378,8 @@ main(argv=None) -> int
 **Dòng lệnh:**
 
 ```bash
-python -m going_modular.train --config configs/bert.yaml
-python -m going_modular.train --config configs/bert.yaml --set run_name=bert_mse --set loss=mse
+python -m src.train --config configs/bert.yaml
+python -m src.train --config configs/bert.yaml --set run_name=bert_mse --set loss=mse
 ```
 
 `main` trả về mã thoát 0 khi chạy xong, khác 0 khi lỗi cấu hình.
@@ -423,10 +423,11 @@ collect_summary_inputs(model_runs, results_dir) -> dict
 
 ```python
 {"param_counts": {model: n_params}, "train_seconds": {model: ...},
- "inference_seconds": {model: ...}, "rmse_raw_by_model": {model: ...}}
+ "inference_seconds": {model: ...}, "rmse_raw_by_model": {model: ...},
+ "device_by_model": {model: "cpu" | tên GPU}}   # lấy từ meta dự đoán
 ```
 
-đúng các tham số của `build_model_summary` (`docs/02_evaluation.md` mục 2.7). Dòng baseline do notebook tự bổ sung vào các từ điển này (`fit_seconds` của baseline làm `train_seconds`, số tham số để trống, `rmse_raw` tính từ điểm Ridge chưa clip hoặc để trống).
+đúng các tham số của `build_model_summary` (`docs/02_evaluation.md` mục 2.7). Dòng baseline do notebook tự bổ sung vào các từ điển này (`fit_seconds` của baseline làm `train_seconds`, `"cpu"` làm thiết bị, số tham số để trống, `rmse_raw` tính từ điểm Ridge chưa clip hoặc để trống).
 
 ### 2.8. Cấu trúc file trên Drive
 
@@ -469,7 +470,7 @@ drive/project/
 | :--- | :--- |
 | `data_setup.py` (`01`) | `run_training` gọi `create_dataloaders`. `fit` dựa vào `train_loader.generator` (mục 2.6 của `01`: `torch.Generator().manual_seed(seed)`) để đặt lại thứ tự xáo trộn mỗi epoch. Batch gồm `input_ids`, `attention_mask`, `labels`, `review_id`; `review_id` không đi vào mô hình. |
 | `metrics.py` (`02`) | `fit` dùng `rmse` và `mae` (có clip) để chọn checkpoint và ghi lịch sử; `predict.py` dùng `clip_scores` và `rmse(clip=False)`; đầu ra của `collect_summary_inputs` đưa vào `build_model_summary`. |
-| `baseline.py` (`02`) | `merge_test_predictions` nhận dự đoán baseline qua `baseline_preds` (cột `review_id`, `pred_baseline`). `docs/02_evaluation.md` cần có cách lưu và nạp pipeline baseline để tạo file này ở Tuần 2 mà không phải huấn luyện lại. |
+| `baseline.py` (`02`) | `merge_test_predictions` nhận dự đoán baseline qua `baseline_preds` (cột `review_id`, `pred_baseline`). `save_baseline` và `load_baseline` (`docs/02_evaluation.md` mục 2.8) lưu và nạp pipeline để tạo file này ở Tuần 2 mà không phải huấn luyện lại; nơi gọi lấy `pred_baseline` bằng `predict_baseline`. |
 | `model_builder.py` (`03`) | `run_training` gọi `set_seed` rồi `build_model`; `count_parameters` cho `n_params`; `build_tokenizer` cho tokenizer; `load_trained_model` dựng lại bằng `pretrained=False`. Đầu ra mô hình được ép `.float()` trước loss, đúng ghi chú ở `03` mục 2.6. |
 | Dashboard | Đọc `test_predictions.csv` và `model_summary.csv` đã commit vào `reports/`; không dùng module nào ở đây. |
 
