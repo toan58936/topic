@@ -4,7 +4,7 @@
 > **Module liên quan:** `src/data_setup.py`
 > **Kế hoạch kiểm thử:** `docs/01_data_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md`, `docs/design.md`; `docs/02_model.md` (tokenizer đi kèm backbone), `docs/03_engine_and_utils.md` (huấn luyện, seed) — hai tài liệu này chưa viết
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Trạng thái:** Đã hiện thực — `src/data_setup.py` + `tests/test_data_setup.py` (15/15 PASS, `-m "not slow"`, 2026-11-09). Chờ chạy `prepare_splits` trên `review.json` thật.
 
 ---
 
