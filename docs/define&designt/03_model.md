@@ -5,7 +5,7 @@
 > **Kế hoạch kiểm thử:** `docs/03_model_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md` (mục 9), `docs/design.md`; `docs/01_data.md` (chỉ về dạng đầu vào `input_ids`, `attention_mask` shape `[B, 256]`; không import `data_setup.py`)
 > **Dùng bởi:** `docs/04_engine_and_utils.md` (`engine.py`, `train.py`, `predict.py`); `docs/02_evaluation.md` nhận số tham số từ `count_parameters` qua nơi gọi (`metrics.py` không import module này)
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Trạng thái:** Đã hiện thực — `src/model_builder.py` + `tests/test_model_builder.py` (14/14 PASS, CPU tiny config, 2026-11-11). `build_tokenizer`/pretrained path chờ kiểm chứng trên Colab (cần mạng).
 
 ---
 
