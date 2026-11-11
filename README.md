@@ -19,3 +19,8 @@ The project is organized into several folders, each serving a specific purpose:
 ## Documentation Update
 
 This section provides an overview of the project structure to help contributors understand the organization of the source code and supporting resources.
+  ## Ghi chú tìm hiểu dự án
+- Tìm hiểu bài toán Text Regression trên dữ liệu Yelp.
+- Mục tiêu là dự đoán điểm đánh giá từ 1.0 đến 5.0.
+- Tìm hiểu kiến trúc Transformer Encoder và Regression Head.
+- Tìm hiểu luồng xử lý dữ liệu đầu vào và đầu ra của mô hình.
