@@ -12,7 +12,7 @@
 
 ### 1.1. Bối cảnh & Mục tiêu
 
-Sau khi Tuần 2 kết thúc (chạy xong 3 backbone + baseline, xuất `test_predictions.csv` và `model_summary.csv` lên Drive), **thành viên F (Integration Tester)** chạy một quy trình xác thực tự động để đảm bảo:
+Sau khi Tuần 2 kết thúc (chạy xong 3 backbone + baseline, xuất `test_predictions.csv` và `model_summary.csv` lên Drive), **thành viên C (Model + Integration Test)** chạy một quy trình xác thực tự động để đảm bảo:
 
 1. **Tính nhất quán dữ liệu**: Các file dự đoán không bị trộn giữa các lần chia (`split_id`), không mất review, `review_id`/`true_stars` khớp nhau.
 2. **Tính đúng đắn schema**: `test_predictions.csv`, `model_summary.csv`, `<model>_test.csv` đúng cột, kiểu, giá trị hợp lệ.
@@ -344,7 +344,7 @@ def reconcile_metrics(data, tolerance):
 
 | Hạng mục | Quyết định |
 | :--- | :--- |
-| Hai công cụ: pytest + CLI độc lập | Đã chốt (Design §6, Table 6: thành viên F) |
+| Hai công cụ: pytest + CLI độc lập | Đã chốt (Design §6, Table 6: thành viên C) |
 | `validate_outputs.py` không import `torch` | Đã chốt (chạy máy không GPU) |
 | Tolerance mặc định `1e-4` cho MAE/RMSE/R², `1e-3` cho Pearson/Spearman | Đề xuất; điều chỉnh ở lần chạy đầu |
 | Kiểm tra `split_id` khớp `split_stats.json` | Bắt buộc (tránh trộn kết quả giữa các lần chia) |

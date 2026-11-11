@@ -3,7 +3,13 @@
 > Quy trình làm việc chuẩn cho toàn nhóm: Git/GitHub, AI collaboration, Phase gates, Definition of Done.
 
 ---
-
+1. ĐỌC assignments.md → Xác nhận module, spec, branch name
+2. ĐỌC implementation.md → Hiểu phase nào, deliverable gì, deadline
+3. ĐỌC workflow.md → Hiểu Git flow, AI 4 bước, Phase gate, AI log
+4. MỞ plans/phase<N>.md → Làm theo checklist (Spec → Code → Test → Verify → Deliver → AI Log → Gate)
+5. CODE: Viết src/<module>.py + tests/test_<module>.py (tuân thủ spec chữ ký hàm)
+6. LOCAL TEST: pytest tests/test_<module>.py PASS
+7. PR → REVIEW → MERGE → LEADER SIGN-OFF GATE
 ## 1. Git & GitHub Workflow
 
 ### 1.1 Branching Model

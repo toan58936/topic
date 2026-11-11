@@ -150,10 +150,9 @@ Tất cả mô hình được đo trên cùng một tập test cố định (`se
 | Leader | Kiến trúc, review code và Pull Request, **chạy huấn luyện Colab (Phase 3–5)**, đối chiếu giấy phép Yelp, tổng hợp báo cáo, điều phối |
 | Thành viên A | Dữ liệu: `data_setup.py`, `split_stats.json`, đặc tả `01` |
 | Thành viên B | Đánh giá và baseline: `metrics.py`, `baseline.py`, đặc tả `02` |
-| Thành viên C | Mô hình: `model_builder.py`, đặc tả `03` |
+| Thành viên C | Mô hình: `model_builder.py` + Integration Test: test toàn bộ luồng end-to-end, validate pipeline outputs, đặc tả `03`, `06` |
 | Thành viên D | Huấn luyện infra: `utils.py`, `engine.py`, `train.py`, `predict.py`, đặc tả `04` |
 | Thành viên E | Dashboard và phân tích lỗi: `app/streamlit_dashboard.py`, đặc tả `05` |
-| Thành viên F | Integration Test: test toàn bộ luồng end-to-end, validate pipeline outputs, đặc tả `06` |
 
 Mỗi người ghi `docs/ai_log.md` cho mảng của mình; Leader tổng hợp. Tên từng thành viên ghi trong README của repo.
 

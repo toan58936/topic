@@ -122,7 +122,7 @@
 ### Phase 6: Validate Outputs → Dashboard Finalize → Error Analysis → Report
 | Step | Owner | Task | Verify |
 |------|-------|------|--------|
-| 6.1 | F | Validate pipeline outputs sau Leader training: checkpoints, history.csv, run_meta.json, merge predictions, model_summary.csv, dashboard load | Báo cáo "Pipeline output VALID" hoặc "Issue: ..." |
+| 6.1 | C | Validate pipeline outputs sau Leader training: checkpoints, history.csv, run_meta.json, merge predictions, model_summary.csv, dashboard load | Báo cáo "Pipeline output VALID" hoặc "Issue: ..." |
 | 6.2 | E | Finalize dashboard: charts, filters, detail view với CSV thực | Chạy local, tất cả features work |
 | 6.3 | E | Error Analysis: sample 40 reviews từ `test_predictions_with_text.csv`, gán 5 nhóm lỗi, Leader cross-check 4 reviews | `error_analysis.csv`, summary cho báo cáo |
 | 6.4 | Leader | Tổng hợp `ai_log.md`, viết báo cáo PDF, chuẩn bị demo | Báo cáo hoàn chỉnh, demo ready |
@@ -156,7 +156,7 @@
 
 ### Phase 0 Done khi:
 - [ ] GitHub private repo ready, protected branches, CI passing
-- [ ] All 7 members: local env verified, `pytest tests/` PASS
+- [ ] All 6 members: local env verified, `pytest tests/` PASS
 - [ ] `requirements.txt` pinned, `app/requirements.txt` nhẹ
 - [ ] CI/CD (GitHub Actions) running pytest on PR
 - [ ] Pre-commit hooks configured (pytest, black, isort)
