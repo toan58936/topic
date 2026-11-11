@@ -42,3 +42,37 @@
 - `split_stats.json` có thêm khoá `quota` (`{split: {star: count}}`) ngoài schema gốc — cần cho test D2 đối chiếu hạn ngạch.
 - `data_version` = `yelp_YYYY_MM_<sha8>` với YYYY_MM theo thời điểm chạy (UTC), sha8 = 8 ký tự đầu sha256 của `review.json`.
 - Phát hiện thêm: tên file `docs/define&designt/Tài liệu Define.md` / `Tài liệu Design.md` bị lỗi encoding trên Windows ("T�i li?u") — cần rename.
+
+---
+
+## Phase 2 - 2026-11-11 - C (Model) + D (Training Infra)
+
+### Prompt
+> Viết `src/model_builder.py`, `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py` theo spec `docs/03_model.md`, `docs/04_engine_and_utils.md`; kèm `tests/test_model_builder.py`, `test_utils.py`, `test_engine.py`, `test_train.py`, `test_predict.py`. `src/metrics.py` viết phần lõi (clip_scores, rmse, mae, compute_metrics, per_star_metrics) làm dependency — phần bootstrap/summary/baseline của member B chưa làm.
+
+### Smoke Test
+- `pytest tests/ -m "not slow"`: **PASS 60/60** (10.2s, CPU, mô hình tiny random config)
+- Gồm: 15 test data_setup + 14 model_builder + 4 utils + 13 engine + 5 train + 9 predict
+- S1/S2 (`slow`/`gpu`): skip — chờ Colab/GPU thật.
+
+### Run Model
+- Chưa chạy trên `review.json`/checkpoint thật (Phase 3 trở đi, Colab).
+
+### Check Description
+- [x] `fit` chạy đúng epochs, history.csv đủ cột, best_model.pt = epoch RMSE Val thấp nhất (F1)
+- [x] Resume sau `stop_after_epoch` cho kết quả y hệt chạy liền trên CPU/dropout=0 (F2)
+- [x] Guard resume/overwrite: config khác -> ValueError nêu khoá; completed -> FileExistsError; overwrite thắng resume (F3)
+- [x] `fit` không nhận test_loader; `run_training` với ExplodingLoader hoàn tất (F5)
+- [x] fp16 trên CPU -> UserWarning + tự tắt; loss không hữu hạn -> FloatingPointError (L5, L7)
+- [x] `predict` clip [1,5], không phụ thuộc batch_size, khôi phục chế độ train/eval (P1-P4)
+- [x] `load_trained_model` đọc backbone_config từ checkpoint, không cần mạng (P5)
+- [x] `export/merge_test_predictions` đúng cột, chặn ghi đè, kiểm tra khớp review_id/true_stars (P6, P7)
+- [x] `set_seed` gọi lại ngay trước `build_model` (T4)
+
+### Ghi chú quyết định / điểm lệch spec nhỏ
+- `fit` nhận `epoch` làm keyword nội bộ của `train_one_epoch` (mặc định 0) để thông báo số epoch trong FloatingPointError.
+- `history.csv`/`run_meta.json`/checkpoint ghi **mỗi epoch** bằng `write_atomic` (os.replace).
+- `best_model.pt` lưu `model_state_dict` đã `.cpu()`; `last.pt` xoá khi hoàn tất trừ khi `keep_last=True`.
+- `predict.py` `AutoConfig.for_model` cần bỏ khoá `model_type` khỏi config dict (transformers 5.x báo trùng tham số).
+- `metrics.py` hiện chỉ có phần lõi; `bootstrap_ci`, `paired_bootstrap_diff`, `mean_predictor`, `build_model_summary`, `write_model_summary` và toàn bộ `baseline.py` còn lại của member B.
+- `test_model_builder.py` mới viết theo checklist phase2 (spec `03_model_tests.md` có thêm nhóm slow/gpu chưa cover).
