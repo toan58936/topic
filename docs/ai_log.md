@@ -81,9 +81,6 @@
 
 ## Phase 6 - 2026-11-13 - E (Dashboard/Error Analysis)
 
-### Prompt
-> Đọc kỹ topic-main(2).zip và hoàn thành nhiệm vụ Thành viên E theo tài liệu: app/streamlit_dashboard.py + Error Analysis.
-
 ### Smoke Test
 - `python -m pytest tests/test_dashboard.py tests/test_error_analysis.py -q`: **39 passed**, 8.53s, Python 3.12, Streamlit 1.67.0; môi trường **không cài torch**.
 - AppTest kiểm tra bản có/không text, đổi model, lọc sao 1/5 và rỗng, sắp xếp, dropdown xem chi tiết; test render riêng kiểm tra click chọn dòng.
