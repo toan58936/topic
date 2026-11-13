@@ -15,3 +15,7 @@ __pycache__/
 .ipynb_checkpoints/
 .pytest_cache/
 .venv/
+
+# Member E: synthetic demo and local review worksheets (any directory)
+demo_reports*/
+**/*_with_text.csv

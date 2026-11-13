@@ -24,3 +24,13 @@ This section provides an overview of the project structure to help contributors 
 - Mục tiêu là dự đoán điểm đánh giá từ 1.0 đến 5.0.
 - Tìm hiểu kiến trúc Transformer Encoder và Regression Head.
 - Tìm hiểu luồng xử lý dữ liệu đầu vào và đầu ra của mô hình.
+## Thành viên E — Dashboard & Error Analysis
+
+Hướng dẫn đầy đủ (cài đặt Windows, demo, CSV đầu vào, gán nhãn, cross-check và kiểm thử): [docs/member_e_guide.md](docs/member_e_guide.md).
+
+```bash
+python -m pip install -r app/requirements.txt
+python -m streamlit run app/streamlit_dashboard.py
+```
+
+Chưa có dữ liệu training? Chạy `python -m scripts.create_dashboard_demo`, rồi nhập `demo_reports` ở ô **Thư mục CSV**. Dữ liệu demo được ghi rõ là giả lập, không dùng cho báo cáo kết quả.
