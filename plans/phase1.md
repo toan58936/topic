@@ -1,4 +1,4 @@
-# Phase 1 Checklist: Data & Baseline
+                    # Phase 1 Checklist: Data & Baseline
 
 > Data setup, metrics, baseline. Owner: A (Data), B (Baseline), Leader (review).
 
@@ -7,10 +7,10 @@
 ## 1.1 Spec & Code
 
 ### Data Setup (A)
-- [ ] Spec `docs/01_data.md` written
+- [x] Spec `docs/01_data.md` written
 - [ ] Spec reviewed by Leader
-- [ ] Code `src/data_setup.py` written (`prepare_splits`, `create_dataloaders`)
-- [ ] Code `src/data_setup.py` follows spec signatures exactly
+- [x] Code `src/data_setup.py` written (`prepare_splits`, `create_dataloaders`)
+- [x] Code `src/data_setup.py` follows spec signatures exactly
 
 ### Metrics (B)
 - [ ] Spec `docs/02_evaluation.md` written
@@ -24,11 +24,11 @@
 
 ## 1.2 Tests (CPU, Synthetic Data)
 
-- [ ] `tests/test_data_setup.py` written & PASS
-  - [ ] Dataset shape [B, 256] for input_ids, attention_mask
-  - [ ] Labels float32
-  - [ ] Duplicate text removal works
-  - [ ] split_id stable with same seed
+- [x] `tests/test_data_setup.py` written & PASS (15/15, `-m "not slow"`; S1/S2 chờ review.json thật)
+  - [x] Dataset shape [B, 256] for input_ids, attention_mask (D10, D12)
+  - [x] Labels float32 (D10, D12)
+  - [x] Duplicate text removal works (D15 + `duplicate_text_removed` trong split_stats)
+  - [x] split_id stable with same seed (D4, D9)
 
 - [ ] `tests/test_metrics.py` written & PASS
   - [ ] Perfect prediction: MAE=0, RMSE=0, R²=1
@@ -85,7 +85,7 @@
 
 ## 1.5 AI Log
 
-- [ ] `docs/ai_log.md` updated with Phase 1 entries (A, B)
+- [x] `docs/ai_log.md` updated with Phase 1 entries (A; B pending)
 
 ---
 
