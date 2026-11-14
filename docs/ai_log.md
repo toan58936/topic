@@ -42,6 +42,72 @@
 - `split_stats.json` có thêm khoá `quota` (`{split: {star: count}}`) ngoài schema gốc — cần cho test D2 đối chiếu hạn ngạch.
 - `data_version` = `yelp_YYYY_MM_<sha8>` với YYYY_MM theo thời điểm chạy (UTC), sha8 = 8 ký tự đầu sha256 của `review.json`.
 - Phát hiện thêm: tên file `docs/define&designt/Tài liệu Define.md` / `Tài liệu Design.md` bị lỗi encoding trên Windows ("T�i li?u") — cần rename.
+
+---
+
+## Phase 2 - 2026-11-11 - C (Model) + D (Training Infra)
+
+### Prompt
+> Viết `src/model_builder.py`, `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py` theo spec `docs/03_model.md`, `docs/04_engine_and_utils.md`; kèm `tests/test_model_builder.py`, `test_utils.py`, `test_engine.py`, `test_train.py`, `test_predict.py`. `src/metrics.py` viết phần lõi (clip_scores, rmse, mae, compute_metrics, per_star_metrics) làm dependency — phần bootstrap/summary/baseline của member B chưa làm.
+
+### Smoke Test
+- `pytest tests/ -m "not slow"`: **PASS 60/60** (10.2s, CPU, mô hình tiny random config)
+- Gồm: 15 test data_setup + 14 model_builder + 4 utils + 13 engine + 5 train + 9 predict
+- S1/S2 (`slow`/`gpu`): skip — chờ Colab/GPU thật.
+
+### Run Model
+- Chưa chạy trên `review.json`/checkpoint thật (Phase 3 trở đi, Colab).
+
+### Check Description
+- [x] `fit` chạy đúng epochs, history.csv đủ cột, best_model.pt = epoch RMSE Val thấp nhất (F1)
+- [x] Resume sau `stop_after_epoch` cho kết quả y hệt chạy liền trên CPU/dropout=0 (F2)
+- [x] Guard resume/overwrite: config khác -> ValueError nêu khoá; completed -> FileExistsError; overwrite thắng resume (F3)
+- [x] `fit` không nhận test_loader; `run_training` với ExplodingLoader hoàn tất (F5)
+- [x] fp16 trên CPU -> UserWarning + tự tắt; loss không hữu hạn -> FloatingPointError (L5, L7)
+- [x] `predict` clip [1,5], không phụ thuộc batch_size, khôi phục chế độ train/eval (P1-P4)
+- [x] `load_trained_model` đọc backbone_config từ checkpoint, không cần mạng (P5)
+- [x] `export/merge_test_predictions` đúng cột, chặn ghi đè, kiểm tra khớp review_id/true_stars (P6, P7)
+- [x] `set_seed` gọi lại ngay trước `build_model` (T4)
+
+### Ghi chú quyết định / điểm lệch spec nhỏ
+- `fit` nhận `epoch` làm keyword nội bộ của `train_one_epoch` (mặc định 0) để thông báo số epoch trong FloatingPointError.
+- `history.csv`/`run_meta.json`/checkpoint ghi **mỗi epoch** bằng `write_atomic` (os.replace).
+- `best_model.pt` lưu `model_state_dict` đã `.cpu()`; `last.pt` xoá khi hoàn tất trừ khi `keep_last=True`.
+- `predict.py` `AutoConfig.for_model` cần bỏ khoá `model_type` khỏi config dict (transformers 5.x báo trùng tham số).
+- `metrics.py` hiện chỉ có phần lõi; `bootstrap_ci`, `paired_bootstrap_diff`, `mean_predictor`, `build_model_summary`, `write_model_summary` và toàn bộ `baseline.py` còn lại của member B.
+- `test_model_builder.py` mới viết theo checklist phase2 (spec `03_model_tests.md` có thêm nhóm slow/gpu chưa cover).
+
+---
+
+## Phase 6 - 2026-11-13 - E (Dashboard/Error Analysis)
+
+### Smoke Test
+- `python -m pytest tests/test_dashboard.py tests/test_error_analysis.py -q`: **39 passed**, 8.53s, Python 3.12, Streamlit 1.67.0; môi trường **không cài torch**.
+- AppTest kiểm tra bản có/không text, đổi model, lọc sao 1/5 và rỗng, sắp xếp, dropdown xem chi tiết; test render riêng kiểm tra click chọn dòng.
+- Test chuẩn bị/tổng hợp Error Analysis bằng dữ liệu giả: 40 ID duy nhất, 4 random/sao, seed cố định, worksheet Leader không lộ nhãn E, chặn nhãn thiếu/đổi dữ liệu gốc, chặn agreement 2/4, chấp nhận 3/4.
+- Một warning từ plugin anyio của môi trường về API pytest bị deprecated, không phải lỗi ứng dụng.
+- Không chạy lại suite training A–D (môi trường không cài torch/transformers).
+
+### Run Model
+- Không chạy production training hoặc inference; dashboard chỉ đọc CSV.
+- Chưa có kết quả training thật trong ZIP. Chưa gán nhãn 40 review thật, chưa Leader cross-check, chưa PR/merge.
+
+### Check Description
+- [x] Đọc CSV ưu tiên with_text, bảng summary giữ mọi model có mặt, blank khi thiếu metrics.
+- [x] Scatter + identity line, histogram, per-star MAE/RMSE/n + Macro-MAE qua src.metrics.
+- [x] Filter/sort, Top-10, detail text; không import torch.
+- [x] Hàm/công cụ sampling + annotation validation + summary, tài liệu hướng dẫn Windows.
+- [x] Demo riêng có banner SYNTHETIC, không tạo báo cáo thật giả mạo.
+- [ ] Nhận CSV thật đầy đủ sau Leader/F validation.
+- [ ] E gán nhãn 40 review, Leader kiểm tra 4 review ≥75%, tạo báo cáo cuối.
+- [ ] Review/merge PR, ảnh demo với dữ liệu thật.
+
+### Quyết định và điểm tích hợp
+- Gọi `per_star_metrics(y_true, y_pred)` theo code hiện có (tự clip), không truyền keyword `clip` mà spec minh họa.
+- Chuyển torch import trong tests/conftest.py sang lazy import ở helper để test E chạy độc lập; Dataset giả dùng __len__/__getitem__ protocol.
+- Bổ sung scripts/error_analysis.py thay vì sửa module metrics của B. Các CLI `src.metrics --sample-errors` trong design chưa được hiện thực; guide đưa lệnh thực chạy được.
+- Loại top-20 khỏi random pool để có đúng 40 review duy nhất; sort ID trước random, seed=42, thiếu 4/sao thì báo lỗi.
+- merge_test_predictions hiện thiếu n_tokens/split_id: dashboard chấp nhận kèm cảnh báo; Error Analysis cần đầy đủ, chờ D/F cung cấp đúng schema.
 \# AI Log
 
 

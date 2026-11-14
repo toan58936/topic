@@ -1,5 +1,5 @@
-# Dashboard: không cài torch
-streamlit
-pandas
-numpy
-scipy
+# CSV dashboard only: no torch, transformers, or model downloads.
+streamlit>=1.50,<2
+pandas>=2,<3
+numpy>=1.24,<3
+scipy>=1.10,<2
