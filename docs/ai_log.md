@@ -76,3 +76,39 @@
 - `predict.py` `AutoConfig.for_model` cần bỏ khoá `model_type` khỏi config dict (transformers 5.x báo trùng tham số).
 - `metrics.py` hiện chỉ có phần lõi; `bootstrap_ci`, `paired_bootstrap_diff`, `mean_predictor`, `build_model_summary`, `write_model_summary` và toàn bộ `baseline.py` còn lại của member B.
 - `test_model_builder.py` mới viết theo checklist phase2 (spec `03_model_tests.md` có thêm nhóm slow/gpu chưa cover).
+
+---
+
+## Phase 3 - 2026-11-13 - B (Eval)
+
+### Prompt
+> Viết toàn bộ `src/metrics.py` và `src/baseline.py` kèm `tests/test_metrics.py`, `tests/test_baseline.py` theo spec `docs/define&designt/02_evaluation.md` và `docs/tests/02_evaluation_tests.md`. `metrics.py`: clip_scores, rmse, mae, compute_metrics (có cờ clip), per_star_metrics (có cờ clip), bootstrap_ci, paired_bootstrap_diff, mean_predictor_metrics, threshold_moc1, build_model_summary, write_model_summary. `baseline.py`: build_baseline, fit_baseline (lưới 84 tổ hợp TF-IDF + Ridge, chọn theo Val RMSE, n_jobs=-1), predict_baseline, save_baseline/load_baseline (joblib, atomic write). Lưu artifact `baseline_val.pkl` và `baseline_test.pkl`.
+
+### Smoke Test
+- `pytest tests/test_metrics.py tests/test_baseline.py -m "not slow"`: **PASS 30/30** (~8s, CPU synthetic)
+- `pytest tests/test_metrics.py tests/test_baseline.py tests/test_data_setup.py tests/test_utils.py -m "not slow"`: **PASS 49/49** (~9s, CPU)
+- Các test cần `transformers` (engine, model_builder, predict, train) bị skip do chưa cài thư viện (môn C/D), không liên quan đến mảng B.
+
+### Run Model
+- Chưa chạy trên `review.json` thật (chờ dữ liệu trên Drive, Colab). Test chạy trên dữ liệu tổng hợp synthetic.
+
+### Check Description
+- [x] `clip_scores`: đúng giá trị, giữ kiểu (list/ndarray/tensor), không sửa tại chỗ, `low > high` -> ValueError (D8)
+- [x] `compute_metrics`: MAE/RMSE/R²/Pearson/Spearman đúng trên ví dụ tính tay; R² có thể âm; nhãn hằng số -> NaN cho tương quan (D1–D5, D5b)
+- [x] `per_star_metrics`: MAE/RMSE theo từng mức sao + macro_mae; thiếu mức sao không lỗi; nhãn ngoài 1-5 -> ValueError (D6, D7, D7b)
+- [x] Cờ `clip`: clip=True tính trên điểm đã clip, clip=False = rmse_raw; clip không làm tăng RMSE (D9, D10)
+- [x] `bootstrap_ci` / `paired_bootstrap_diff`: tái lập theo seed, khoảng chứa điểm ước lượng, tham số sai -> ValueError (D11, D12)
+- [x] `build_model_summary`: đủ cột theo thứ tự schema, công thức mức giảm so với baseline, thiếu cột pred / baseline_name không trong models -> ValueError (D13, D14)
+- [x] `write_model_summary`: không ghi đè trừ khi `overwrite=True`, ghi nguyên atomic, NaN -> "" (D15)
+- [x] `import src.metrics` không kéo theo `torch` (D16)
+- [x] `baseline.py`: shape (N,), clip [1,5], chữ ký không có Test, chọn theo Val RMSE, tái lập, học được tín hiệu (RMSE < dự đoán trung bình) (D17–D20)
+- [x] Trả về đủ khoá pipeline/best_params/grid_results/fit_seconds/grid_seconds; grid_results 84 dòng, đủ cột (D21)
+- [x] Đầu vào sai -> ValueError; save/load joblib -> dự đoán giống hệt, FileExistsError khi không overwrite, FileNotFoundError khi thiếu file (D22, D23)
+- [x] `mean_predictor_metrics` + `threshold_moc1` (0.85 × RMSE_baseline_val) đúng công thức
+
+### Ghi chú quyết định
+- `compute_metrics` và `per_star_metrics` bổ sung tham số `clip: bool = True` theo spec mục 2.3.
+- `build_model_summary` raises `ValueError` nếu thiếu cột `pred_<model>` (theo spec mục 2.9 và test D14).
+- `fit_baseline` dùng `joblib.Parallel(n_jobs=-1)` để chạy song song 84 tổ hợp trên CPU; pipeline winning được refit trên Train, `fit_seconds` đo thời gian fit tổ hợp thắng, `grid_seconds` tổng thời gian lưới.
+- `save_baseline`/`load_baseline` ghi/nạp bằng `joblib` với atomic write (`os.replace`), kiểm tra đủ khoá bắt buộc.
+- `metrics.py` chỉ import `numpy`, `pandas`, `scipy`, không import `torch` (thỏa mãn FR-7, D16).
