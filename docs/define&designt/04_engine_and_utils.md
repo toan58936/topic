@@ -5,7 +5,7 @@
 > **Kế hoạch kiểm thử:** `docs/04_engine_and_utils_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md` (mục 9, 11, 12, 14), `docs/design.md`; `docs/01_data.md` (dạng batch, `create_dataloaders`, bộ sinh xáo trộn của `train_loader`); `docs/02_evaluation.md` (`rmse`, `mae`, `clip_scores`, đầu vào của `build_model_summary`); `docs/03_model.md` (`build_model`, `build_tokenizer`, `count_parameters`)
 > **Dùng bởi:** `notebooks/colab_runner.ipynb`; dashboard đọc kết quả do module này xuất (`docs/05_dashboard.md`, đề xuất, chưa viết)
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Trạng thái:** Đã hiện thực — `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py` + 4 file test (31/31 PASS, CPU synthetic, 2026-11-11). Smoke test GPU/Colab chưa chạy.
 
 ---
 

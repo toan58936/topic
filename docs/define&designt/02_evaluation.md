@@ -5,7 +5,7 @@
 > **Kế hoạch kiểm thử:** `docs/02_evaluation_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md`, `docs/design.md`; `docs/01_data.md` (chỉ về định dạng ba file `parquet`, không import `data_setup.py`)
 > **Dùng bởi:** `docs/03_model.md` (không), `docs/04_engine_and_utils.md` (`clip_scores`, `rmse`, `build_model_summary`), dashboard (`docs/05_dashboard.md` — đề xuất, chưa viết)
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Trạng thái:** Hiện thực một phần (2026-11-11) — `src/metrics.py` đã có `clip_scores`, `rmse`, `mae`, `compute_metrics`, `per_star_metrics` (đủ cho engine/predict). Còn thiếu: `bootstrap_ci`, `paired_bootstrap_diff`, `mean_predictor`, `build_model_summary`, `write_model_summary` và toàn bộ `baseline.py` (member B).
 
 ---
 
