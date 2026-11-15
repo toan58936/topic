@@ -112,3 +112,36 @@
 - `fit_baseline` dùng `joblib.Parallel(n_jobs=-1)` để chạy song song 84 tổ hợp trên CPU; pipeline winning được refit trên Train, `fit_seconds` đo thời gian fit tổ hợp thắng, `grid_seconds` tổng thời gian lưới.
 - `save_baseline`/`load_baseline` ghi/nạp bằng `joblib` với atomic write (`os.replace`), kiểm tra đủ khoá bắt buộc.
 - `metrics.py` chỉ import `numpy`, `pandas`, `scipy`, không import `torch` (thỏa mãn FR-7, D16).
+
+---
+
+## Phase 6 - 2026-11-13 - E (Dashboard/Error Analysis)
+
+### Smoke Test
+- `python -m pytest tests/test_dashboard.py tests/test_error_analysis.py -q`: **39 passed**, 8.53s, Python 3.12, Streamlit 1.67.0; môi trường **không cài torch**.
+- AppTest kiểm tra bản có/không text, đổi model, lọc sao 1/5 và rỗng, sắp xếp, dropdown xem chi tiết; test render riêng kiểm tra click chọn dòng.
+- Test chuẩn bị/tổng hợp Error Analysis bằng dữ liệu giả: 40 ID duy nhất, 4 random/sao, seed cố định, worksheet Leader không lộ nhãn E, chặn nhãn thiếu/đổi dữ liệu gốc, chặn agreement 2/4, chấp nhận 3/4.
+- Một warning từ plugin anyio của môi trường về API pytest bị deprecated, không phải lỗi ứng dụng.
+- Không chạy lại suite training A–D (môi trường không cài torch/transformers).
+
+### Run Model
+- Không chạy production training hoặc inference; dashboard chỉ đọc CSV.
+- Chưa có kết quả training thật trong ZIP. Chưa gán nhãn 40 review thật, chưa Leader cross-check, chưa PR/merge.
+
+### Check Description
+- [x] Đọc CSV ưu tiên with_text, bảng summary giữ mọi model có mặt, blank khi thiếu metrics.
+- [x] Scatter + identity line, histogram, per-star MAE/RMSE/n + Macro-MAE qua src.metrics.
+- [x] Filter/sort, Top-10, detail text; không import torch.
+- [x] Hàm/công cụ sampling + annotation validation + summary, tài liệu hướng dẫn Windows.
+- [x] Demo riêng có banner SYNTHETIC, không tạo báo cáo thật giả mạo.
+- [ ] Nhận CSV thật đầy đủ sau Leader/F validation.
+- [ ] E gán nhãn 40 review, Leader kiểm tra 4 review ≥75%, tạo báo cáo cuối.
+- [ ] Review/merge PR, ảnh demo với dữ liệu thật.
+
+### Quyết định và điểm tích hợp
+- Gọi `per_star_metrics(y_true, y_pred)` theo code hiện có (tự clip), không truyền keyword `clip` mà spec minh họa.
+- Chuyển torch import trong tests/conftest.py sang lazy import ở helper để test E chạy độc lập; Dataset giả dùng __len__/__getitem__ protocol.
+- Bổ sung scripts/error_analysis.py thay vì sửa module metrics của B. Các CLI `src.metrics --sample-errors` trong design chưa được hiện thực; guide đưa lệnh thực chạy được.
+- Loại top-20 khỏi random pool để có đúng 40 review duy nhất; sort ID trước random, seed=42, thiếu 4/sao thì báo lỗi.
+- merge_test_predictions hiện thiếu n_tokens/split_id: dashboard chấp nhận kèm cảnh báo; Error Analysis cần đầy đủ, chờ D/F cung cấp đúng schema.
+\# AI Log
