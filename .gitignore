@@ -5,6 +5,8 @@ review.json
 *.parquet
 *.pt
 *.pth
+*.joblib
+*.pkl
 
 # kết quả có nội dung review: chỉ để ở Drive hoặc máy cá nhân
 reports/*_with_text.csv
