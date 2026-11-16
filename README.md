@@ -34,3 +34,23 @@ python -m streamlit run app/streamlit_dashboard.py
 ```
 
 Chưa có dữ liệu training? Chạy `python -m scripts.create_dashboard_demo`, rồi nhập `demo_reports` ở ô **Thư mục CSV**. Dữ liệu demo được ghi rõ là giả lập, không dùng cho báo cáo kết quả.
+
+
+## Project Structure
+
+The project is organized into the following main directories:
+
+| Directory | Description |
+|---|---|
+| `app/` | Contains the Streamlit dashboard application for displaying project results. |
+| `docs/` | Stores project documentation, requirements, system design, implementation details, and testing specifications. |
+| `notebooks/` | Contains notebooks used to run experiments and demonstrate the project workflow. |
+| `plans/` | Stores project plans, implementation phases, workflows, and member assignments. |
+| `reports/` | Reserved for generated reports, experimental results, and analysis outputs. |
+| `scripts/` | Contains utility scripts for dashboard demonstration, error analysis, output validation, and result synchronization. |
+| `src/` | Contains the core source code for data preparation, model building, training, prediction, evaluation, and utilities. |
+| `tests/` | Contains automated unit and integration tests to verify project functionality and reliability. |
+
+## Documentation Update
+
+This section provides an overview of the project's directory structure and the purpose of each main directory, helping contributors understand where to find source code, documentation, experiments, reports, and tests.

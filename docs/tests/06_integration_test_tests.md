@@ -1,14 +1,12 @@
-# Kế hoạch kiểm thử Meta-test cho Validation — `tests/test_integration_validation.py`
-
-> **Tài liệu:** `docs/06_integration_test_tests.md`
-> **Đặc tả được kiểm thử:** `docs/06_integration_test.md` (script `scripts/validate_outputs.py` và pytest `tests/test_integration.py`)
-> **Trạng thái:** Bản nháp trước khi hiện thực
-
+> **Kế hoạch kiểm thử:** `docs/tests/06_integration_test_tests.md` (tách riêng — meta-test cho script validation)
+> **Tài liệu:** `docs/define&designt/06_integration_test.md` (Define & Design cho end-to-end validation)
+Đặc tả được kiểm thử: ` docs/define&designt/06_integration_test.md (script scripts/validate_outputs.py và pytest tests/test_integration.py) `
+> > **Trạng thái:** Đã triển khai một phần; chờ dữ liệu thật cho FR-8 và Leader review
 ---
 
 ## 1. Mục tiêu
 
-Kiểm chứng **script validation tự bắt được lỗi** khi dữ liệu đầu vào sai. Đây là "test của test" — dùng dữ liệu giả cố ý hỏng để xác minh `validate_outputs.py` exit code = 1 và in ra lỗi đúng loại.
+Kiểm chứng script validation tự bắt được lỗi khi dữ liệu đầu vào sai. Đây là "test của test" — dùng dữ liệu giả cố ý hỏng để xác minh `validate_outputs.py` trả về exit code = 1 đối với dữ liệu lỗi và exit code = 0 đối với dữ liệu hợp lệ. Bộ meta-test hiện có 16 test và đã chạy thành công.
 
 ---
 
@@ -89,10 +87,36 @@ def test_corruption_detected(corrupted_results_dir, corruption_type, expected_er
 
     with patch.object(sys, 'argv', ['validate_outputs', '--results-dir', str(results_dir)]):
         exit_code = main()
-    
+
     assert exit_code == 1, f"Corruption {corruption_type} should fail but exited 0"
-    
+
     # Capture stderr/stdout để kiểm tra message lỗi (tuỳ chọn, dùng capsys fixture)
+
+** Fixture corrupted_results_dir ** được cấu hình với 11 kịch bản dữ liệu lỗi (C1–C11). Pytest tự động chạy test_corruption_detected một lần cho mỗi kịch bản.
+
+def test_corruption_detected(corrupted_results_dir, monkeypatch):
+    """Ca 11 tinh huong du lieu hong deu phai bi phat hien."""
+    results_dir, corruption_type = corrupted_results_dir
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["validate_outputs", "--results-dir", str(results_dir)],
+    )
+
+    exit_code = main()
+
+    assert exit_code == 1, (
+        f"Corruption {corruption_type} should fail but exited 0"
+    )
+
+Kết quả mong đợi:
+
+Cả 11 kịch bản C1–C11 đều phải trả về exit_code = 1.
+
+Nếu dữ liệu lỗi nhưng script trả về exit_code = 0, test sẽ thất bại.
+
+Test hiện tại kiểm tra mã thoát của chương trình, chưa kiểm tra nội dung thông báo lỗi cụ thể cho từng kịch bản.
 ```
 
 ### 5.3. Test unit từng hàm kiểm tra (không qua CLI)
@@ -101,23 +125,23 @@ def test_corruption_detected(corrupted_results_dir, corruption_type, expected_er
 def test_check_merge_consistency_split_id_mismatch(valid_results_dir):
     from scripts.validate_outputs import load_all_data, check_merge_consistency
     import json
-    
+
     data = load_all_data(valid_results_dir, valid_results_dir.parent / "data" / "split_stats.json")
     # Hỏng split_id
     data["test_predictions"]["split_id"] = "different_split_id"
     split_stats = json.load(open(valid_results_dir.parent / "data" / "split_stats.json"))
-    
+
     errors = check_merge_consistency(data, split_stats)
     assert any("split_id mismatch" in e for e in errors)
 
 def test_reconcile_metrics_detects_wrong_mae(valid_results_dir):
     from scripts.validate_outputs import load_all_data, reconcile_metrics
-    
+
     data = load_all_data(valid_results_dir, valid_results_dir.parent / "data" / "split_stats.json")
     # Hỏng MAE của BERT trong model_summary
     idx = data["model_summary"][data["model_summary"]["model"] == "bert"].index[0]
     data["model_summary"].loc[idx, "mae"] += 0.1
-    
+
     errors = reconcile_metrics(data, tolerance=1e-4)
     assert any("bert.mae" in e and "diff" in e for e in errors)
 ```
@@ -127,20 +151,20 @@ def test_reconcile_metrics_detects_wrong_mae(valid_results_dir):
 ```python
 def test_check_schemas_pred_out_of_range(valid_results_dir):
     from scripts.validate_outputs import load_all_data, check_schemas
-    
+
     data = load_all_data(valid_results_dir, valid_results_dir.parent / "data" / "split_stats.json")
     data["test_predictions"]["pred_bert"] = 6.0  # vượt 5.0
-    
+
     errors = check_schemas(data)
     assert any("pred_bert" in e and "out of range" in e for e in errors)
 
 def test_check_schemas_abs_err_mismatch(valid_results_dir):
     from scripts.validate_outputs import load_all_data, check_schemas
-    
+
     data = load_all_data(valid_results_dir, valid_results_dir.parent / "data" / "split_stats.json")
     # abs_err_bert sai: true=4, pred=3.2 → abs_err nên là 0.8, set 9.9
     data["test_predictions"]["abs_err_bert"] = 9.9
-    
+
     errors = check_schemas(data)
     assert any("abs_err_bert" in e and "mismatch" in e for e in errors)
 ```
@@ -185,7 +209,7 @@ python -m scripts.validate_outputs --results-dir reports/
 
 @pytest.fixture(params=[
     "split_id_mismatch",
-    "duplicate_review_id", 
+    "duplicate_review_id",
     "invalid_true_stars",
     "pred_out_of_range",
     "abs_err_mismatch",
@@ -199,11 +223,11 @@ python -m scripts.validate_outputs --results-dir reports/
 def corrupted_results_dir(tmp_path, valid_results_dir, request):
     import shutil
     import pandas as pd
-    
+
     corruption_type = request.param
     test_dir = tmp_path / f"corrupted_{corruption_type}"
     shutil.copytree(valid_results_dir, test_dir)
-    
+
     # Áp dụng hỏng theo loại
     if corruption_type == "split_id_mismatch":
         df = pd.read_csv(test_dir / "test_predictions.csv")
@@ -251,7 +275,7 @@ def corrupted_results_dir(tmp_path, valid_results_dir, request):
         df = pd.read_csv(test_dir / "model_summary.csv")
         df = df.drop(columns=["seconds_per_epoch"])
         df.to_csv(test_dir / "model_summary.csv", index=False)
-    
+
     yield test_dir, corruption_type
 ```
 
