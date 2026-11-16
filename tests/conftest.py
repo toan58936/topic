@@ -464,3 +464,219 @@ def pad_batch():
         return padded_ids, padded_mask
 
     return _pad_batch
+
+
+@pytest.fixture()
+def valid_results_dir(tmp_path):
+    """Tạo bộ dữ liệu kết quả giả hợp lệ cho Integration Test."""
+    import numpy as np
+    import pandas as pd
+
+    from src.metrics import build_model_summary
+
+    results_dir = tmp_path / "results"
+    preds_dir = results_dir / "preds"
+    data_dir = tmp_path / "data"
+
+    preds_dir.mkdir(parents=True)
+    data_dir.mkdir(parents=True)
+
+    split_id = "abc123def456"
+
+    # Nhãn thật của 6 review
+    y_true = np.array([1, 2, 3, 4, 5, 4], dtype=float)
+
+    # Dự đoán chưa clip của từng mô hình
+    raw_predictions = {
+        "bert": np.array([1.2, 2.1, 2.8, 4.2, 4.7, 3.8]),
+        "distilbert": np.array([1.1, 2.3, 3.1, 3.7, 4.8, 4.2]),
+        "roberta": np.array([1.3, 1.9, 3.2, 4.1, 5.2, 3.9]),
+    }
+
+    # Tạo test_predictions.csv
+    merged = pd.DataFrame({
+        "review_id": [f"review_{i:03d}" for i in range(6)],
+        "true_stars": y_true.astype(int),
+        "n_tokens": [12, 20, 35, 18, 42, 25],
+        "split_id": split_id,
+    })
+
+    rmse_raw_by_model = {}
+
+    for model, raw in raw_predictions.items():
+        clipped = np.clip(raw, 1.0, 5.0)
+
+        merged[f"pred_{model}"] = clipped
+        merged[f"abs_err_{model}"] = np.abs(y_true - clipped)
+
+        rmse_raw_by_model[model] = float(
+            np.sqrt(np.mean((raw - y_true) ** 2))
+        )
+
+        # File dự đoán riêng của từng mô hình
+        individual = pd.DataFrame({
+            "review_id": merged["review_id"],
+            "true_stars": y_true.astype(int),
+            "pred_raw": raw,
+            "pred": clipped,
+            "split_id": split_id,
+        })
+
+        individual.to_csv(
+            preds_dir / f"{model}_test.csv",
+            index=False,
+        )
+
+        # Metadata tương ứng
+        meta = {
+            "model": model,
+            "run_name": f"test_{model}",
+            "checkpoint_epoch": 2,
+            "n": len(y_true),
+            "rmse_raw": rmse_raw_by_model[model],
+            "inference_seconds": 0.5,
+            "fp16": False,
+            "device": "cpu",
+        }
+
+        with open(
+            preds_dir / f"{model}_test_meta.json",
+            "w",
+            encoding="utf-8",
+        ) as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+
+    merged.to_csv(
+        results_dir / "test_predictions.csv",
+        index=False,
+    )
+
+    # Tạo model_summary bằng hàm chuẩn của dự án
+    models = ["bert", "distilbert", "roberta"]
+
+    summary = build_model_summary(
+        preds_df=merged,
+        models=models,
+        rmse_raw_by_model=rmse_raw_by_model,
+        param_counts={
+            "bert": 1000,
+            "distilbert": 800,
+            "roberta": 1200,
+        },
+        train_seconds={
+            "bert": 10.0,
+            "distilbert": 8.0,
+            "roberta": 12.0,
+        },
+        inference_seconds={
+            "bert": 0.5,
+            "distilbert": 0.4,
+            "roberta": 0.6,
+        },
+        seconds_per_epoch={
+            "bert": 5.0,
+            "distilbert": 4.0,
+            "roberta": 6.0,
+        },
+        baseline_name="bert",
+        split_id=split_id,
+    )
+
+    summary.to_csv(
+        results_dir / "model_summary.csv",
+        index=False,
+    )
+
+    # Thông tin split dùng để đối chiếu
+    split_stats = {
+        "split_id": split_id,
+    }
+
+    with open(
+        data_dir / "split_stats.json",
+        "w",
+        encoding="utf-8",
+    ) as f:
+        json.dump(split_stats, f, ensure_ascii=False, indent=2)
+
+    return results_dir
+
+@pytest.fixture(params=[
+    "split_id_mismatch",
+    "duplicate_review_id",
+    "invalid_true_stars",
+    "pred_out_of_range",
+    "abs_err_mismatch",
+    "model_summary_metric_wrong",
+    "missing_pred_column",
+    "rmse_raw_mismatch",
+    "missing_split_id_column",
+    "individual_pred_raw_not_match",
+    "dashboard_missing_column",
+])
+def corrupted_results_dir(tmp_path, valid_results_dir, request):
+    import shutil
+    import pandas as pd
+
+    corruption_type = request.param
+    test_dir = tmp_path / f"corrupted_{corruption_type}"
+    shutil.copytree(valid_results_dir, test_dir)
+
+    if corruption_type == "split_id_mismatch":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df["split_id"] = "wrong_split_id"
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "duplicate_review_id":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df = pd.concat([df, df.iloc[[0]]], ignore_index=True)
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "invalid_true_stars":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df.loc[0, "true_stars"] = 0
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "pred_out_of_range":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df.loc[0, "pred_bert"] = 6.0
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "abs_err_mismatch":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df.loc[0, "abs_err_bert"] = 9.9
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "model_summary_metric_wrong":
+        df = pd.read_csv(test_dir / "model_summary.csv")
+        idx = df[df["model"] == "bert"].index[0]
+        df.loc[idx, "mae"] += 0.1
+        df.to_csv(test_dir / "model_summary.csv", index=False)
+
+    elif corruption_type == "missing_pred_column":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df = df.drop(columns=["pred_distilbert"])
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "rmse_raw_mismatch":
+        df = pd.read_csv(test_dir / "model_summary.csv")
+        idx = df[df["model"] == "bert"].index[0]
+        df.loc[idx, "rmse_raw"] += 0.1
+        df.to_csv(test_dir / "model_summary.csv", index=False)
+
+    elif corruption_type == "missing_split_id_column":
+        df = pd.read_csv(test_dir / "test_predictions.csv")
+        df = df.drop(columns=["split_id"])
+        df.to_csv(test_dir / "test_predictions.csv", index=False)
+
+    elif corruption_type == "individual_pred_raw_not_match":
+        df = pd.read_csv(test_dir / "preds" / "bert_test.csv")
+        df.loc[0, "pred_raw"] += 10.0
+        df.to_csv(test_dir / "preds" / "bert_test.csv", index=False)
+
+    elif corruption_type == "dashboard_missing_column":
+        df = pd.read_csv(test_dir / "model_summary.csv")
+        df = df.drop(columns=["seconds_per_epoch"])
+        df.to_csv(test_dir / "model_summary.csv", index=False)
+
+    yield test_dir, corruption_type
