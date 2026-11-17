@@ -1,235 +1,161 @@
-# Đặc tả Thiết kế Dashboard Kết quả — `app/streamlit_dashboard.py`
+# Đặc tả Dashboard kết quả — `app/streamlit_dashboard.py`
 
-> **Tài liệu:** `docs/05_dashboard.md` (Define & Design cho dashboard Streamlit)
-> **Module liên quan:** `app/streamlit_dashboard.py`
-> **Kế hoạch kiểm thử:** `docs/05_dashboard_tests.md` (tách riêng)
-> **Phụ thuộc:** `docs/define.md`, `docs/design.md`; `docs/02_evaluation.md` (`metrics.py` để tính lại chỉ số theo bộ lọc); `docs/04_engine_and_utils.md` (schema `test_predictions.csv` và `model_summary.csv`)
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Tài liệu:** `docs/define&designt/05_dashboard.md`
+> **Kế hoạch kiểm thử:** [05_dashboard_tests.md](../tests/05_dashboard_tests.md)
+> **Phạm vi E:** Dashboard và Error Analysis theo `plans/assignments.md` mục 7.
+> **Tham chiếu:** `docs/define&designt/Tài liệu Define.md`, `docs/define&designt/Tài liệu Design.md`, `docs/define&designt/02_evaluation.md`, `docs/define&designt/04_engine_and_utils.md`.
+> **Trạng thái:** Đã hiện thực; đồng bộ với code ngày 2026-11-17. Phân tích trên dữ liệu thật vẫn chờ các phụ thuộc ở mục 2.8.
 
----
+## PHẦN I: DEFINE — Yêu cầu đã hiện thực
 
-## PHẦN I: DEFINE — Xác định Bài toán & Yêu cầu
+### 1.1. Bối cảnh và mục tiêu
 
-### 1.1. Bối cảnh & Mục tiêu
+Dashboard đọc CSV, không nạp mô hình hay trọng số, không cần GPU và không import `torch`. Chạy từ thư mục gốc repo:
 
-Dashboard là giao diện trình bày kết quả cuối cùng cho buổi báo cáo. **Yêu cầu cốt lõi: không cần nạp mô hình, không cần GPU, chỉ đọc hai file CSV nhẹ đã commit vào `reports/`**. Chạy trên máy cá nhân của bất kỳ thành viên nào bằng `streamlit run app/streamlit_dashboard.py`.
+```powershell
+streamlit run app/streamlit_dashboard.py
+```
 
-Mục tiêu:
-- So sánh mốc trung bình, baseline và ba mô hình Transformer trên các chỉ số chính
-- Trực quan hóa dự đoán so với nhãn thật, phân phối sai số
-- Phân tích theo từng mức sao (MAE/RMSE per-star + Macro-MAE)
-- Xem chi tiết ca đoán sai điển hình (Top-10 sai số lớn nhất)
+Mục tiêu là so sánh kết quả Test, xem sai số theo mức sao và đọc các ca sai lớn nhất. Dashboard không nhận review mới để suy luận. Kiểm thử giao diện dùng dữ liệu tổng hợp; chưa có kết quả training thật trong `reports/` tại lần rà soát này.
 
-### 1.2. Đầu vào / Đầu ra
+### 1.2. Đầu vào và đầu ra
 
-| | Mô tả |
+| Thành phần | Hành vi thực tế |
 | :--- | :--- |
-| **Đầu vào bắt buộc** | `reports/model_summary.csv`, `reports/test_predictions.csv` (không có cột `text`) |
-| **Đầu vào tuỳ chọn** | `reports/test_predictions_with_text.csv` (có cột `text`, từ Drive, bị `.gitignore`) |
-| **Đầu ra** | Giao diện web Streamlit; không ghi file |
+| Thư mục CSV | Mặc định `ROOT/reports`; đặt `YELP_REPORTS_DIR` hoặc nhập tại sidebar để thay đổi. |
+| Bảng tổng hợp | Bắt buộc có `model_summary.csv`. |
+| Dự đoán | Ưu tiên `test_predictions_with_text.csv` nếu tồn tại; nếu không, đọc `test_predictions.csv`. Không cần đồng thời cả hai bản. |
+| Bản có text bị lỗi | Báo lỗi; không âm thầm chuyển sang bản không text. |
+| Đầu ra Dashboard | Giao diện Streamlit; không ghi file. |
+| Dữ liệu demo | Có `DEMO_ONLY.txt` thì hiện cảnh báo dữ liệu giả lập, không dùng làm kết quả báo cáo. |
 
 ### 1.3. Yêu cầu chức năng
 
-| Mã | Yêu cầu |
+| Mã | Hành vi đã hiện thực |
 | :--- | :--- |
-| FR-1 | Đọc `model_summary.csv` và `test_predictions.csv` từ `reports/`; tự dò: nếu có `test_predictions_with_text.csv` thì dùng bản đầy đủ, không thì dùng bản không text. |
-| FR-2 | Bảng so sánh: hiển thị tất cả mô hình có mặt trong `model_summary.csv` (cột `model`) cùng các chỉ số: MAE, RMSE, R², Pearson, Spearman, `train_seconds`, `seconds_per_epoch`, `params_total`, `rmse_reduction_vs_baseline_pct`. Mô hình thiếu chỉ số để trống ô. |
-| FR-3 | Biểu đồ 1: Scatter điểm dự đoán vs điểm thật (trục X: `true_stars`, trục Y: `pred_<model>`), một đồ thị cho mỗi mô hình được chọn. |
-| FR-4 | Biểu đồ 2: Histogram/KDE phân phối sai số tuyệt đối (`abs_err_<model>`) cho mô hình đang chọn. |
-| FR-5 | Bảng per-star: MAE, RMSE, số mẫu `n` cho từng mức sao 1-5 (tính từ `test_predictions.csv` dùng `src.metrics.per_star_metrics`), kèm Macro-MAE. |
-| FR-6 | Bộ lọc: chọn mô hình (radio), lọc theo mức sao (multiselect 1-5), sắp xếp theo sai số của mô hình đang chọn (giảm dần). |
-| FR-7 | Bảng "Ca đoán sai điển hình": Top-10 `review_id` có `abs_err_<model>` lớn nhất trong mức sao đang lọc (hoặc toàn bộ nếu không lọc). Hiển thị: `review_id`, `true_stars`, `pred_<model>`, `abs_err_<model>`, và `text` nếu có bản `with_text`. |
-| FR-8 | Xem chi tiết một review: click vào dòng trong bảng ca đoán sai → mở expander hiển thị toàn bộ `text` (nếu có), nhãn thật, dự đoán, sai số. |
-| FR-9 | Dashboard **không import `torch`**; chỉ dùng `streamlit`, `pandas`, `numpy`, `scipy`, `src.metrics`. `app/requirements.txt` không chứa `torch`. |
-| FR-10 | Chạy được từ thư mục gốc repo: `streamlit run app/streamlit_dashboard.py` (app tự thêm thư mục gốc vào `sys.path` để `import src.metrics`). |
+| FR-1 | Đọc CSV và tự dò bản `_with_text` theo mục 1.2. |
+| FR-2 | Bảng so sánh giữ mọi dòng model trong summary. Hiện các cột thuộc `COMPARISON_COLUMNS` có ít nhất một giá trị; ô thiếu để trống, cột thiếu hoặc toàn null bị bỏ. Bảng luôn là kết quả toàn Test, không tính lại theo bộ lọc. |
+| FR-3 | Scatter cho model đang chọn: X = `true_stars`, Y = `pred_<model>`, miền [1, 5], tooltip ID/nhãn/dự đoán, đường y=x bằng Vega-Lite. |
+| FR-4 | Histogram sai số tuyệt đối bằng `numpy.histogram`: 20 bins trong [0, 4], hiển thị bằng `st.bar_chart`. Không có KDE. |
+| FR-5 | Bảng và biểu đồ per-star MAE/RMSE/n, kèm Macro-MAE, tính trên dữ liệu đang lọc bằng `src.metrics.per_star_metrics`. |
+| FR-6 | Radio chọn model có ít nhất một dự đoán; multiselect sao 1–5 mặc định chọn hết; checkbox sort sai số giảm dần mặc định bật. Review thiếu dự đoán của model đang chọn được bỏ qua kèm cảnh báo số lượng. |
+| FR-7 | Top-10 theo `abs_err_<model>` trong dữ liệu đang lọc, luôn giảm dần dù checkbox sort toàn bộ bảng đã tắt; có text nếu đầu vào có. |
+| FR-8 | Chọn một dòng Top-10 để mở expander chi tiết; khi chưa chọn dòng, dùng selectbox ID. Chi tiết có nhãn thật, dự đoán, sai số và toàn bộ text; thiếu text thì hiện hướng dẫn. |
+| FR-9 | Dashboard dùng `streamlit`, `pandas`, `numpy`, `scipy` qua `src.metrics`; `app/requirements.txt` không có `torch`. |
+| FR-10 | App tự thêm repo root vào `sys.path`, hỗ trợ lệnh chạy từ repo root. |
 
-### 1.4. Ràng buộc
+### 1.4. Ràng buộc và xử lý thiếu dữ liệu
 
-* `src/__init__.py` để trống (theo `docs/02_evaluation.md`), nên `import src.metrics` hoạt động khi không có `torch`.
-* Dashboard **không** cho phép nhập review mới dự đoán (cần nạp trọng số, ngoài phạm vi).
-* `test_predictions.csv` không có cột `text` (đã commit GitHub); bản có `text` chỉ nằm local/Drive.
-* Mọi chỉ số per-star và Macro-MAE tính **tại thời điểm chạy dashboard** từ `test_predictions.csv` bằng `src.metrics.per_star_metrics` để đảm bảo khớp với `model_summary.csv`.
+- Thiếu `n_tokens` hoặc `split_id`: Dashboard vẫn hiển thị và cảnh báo, không tự tạo metadata. Error Analysis bắt buộc có cả hai.
+- Có metadata thì kiểm tra giá trị; predictions phải thuộc một split, và các split không null trong summary phải khớp nếu cả hai file có cột này.
+- Model để vẽ lấy từ `pred_*`, loại `pred_mean_predictor`; bảng summary vẫn giữ dòng `mean_predictor` nếu có.
+- Chưa có model với dự đoán, không chọn sao hoặc không còn review sau lọc: hiện thông báo rồi dừng phần biểu đồ.
+- Text thật chỉ dùng local/Drive; bản `_with_text` bị gitignore.
+- Per-star/Macro-MAE tính lại theo bộ lọc; chỉ đối chiếu summary khi dùng cùng tập review và model.
 
 ### 1.5. Tiêu chí chấp nhận
 
-1. `streamlit run app/streamlit_dashboard.py` khởi động không lỗi trên máy không cài PyTorch.
-2. Bảng so sánh hiển thị đúng số dòng và cột từ `model_summary.csv`.
-3. Per-star MAE/RMSE/Macro-MAE khớp với `src.metrics.per_star_metrics` trên cùng dữ liệu.
-4. Bộ lọc sao và sắp xếp theo sai số hoạt động đúng.
-5. Top-10 ca đoán sai đúng theo `abs_err_<model>` trong mức sao đang lọc.
-6. Nếu có `test_predictions_with_text.csv`, nội dung review hiển thị; nếu không, chỉ hiển thị `review_id` + số liệu.
+1. AppTest chạy với/không text; subprocess import Dashboard không nạp `torch`.
+2. Bảng so sánh giữ mọi model và xử lý đúng metrics thiếu.
+3. Per-star MAE/RMSE/n và Macro-MAE khớp `src.metrics.per_star_metrics`; bỏ qua sao không có mẫu.
+4. Lọc sao, đổi model, bật/tắt sort và lọc rỗng hoạt động đúng.
+5. Top-k đúng ID/thứ tự/text; chọn dòng hoặc selectbox mở đúng chi tiết.
+6. Thiếu metadata vẫn xem Dashboard kèm cảnh báo; Error Analysis từ chối chuẩn bị mẫu.
 
----
+Tên test và giới hạn kiểm chứng nằm trong [kế hoạch kiểm thử](../tests/05_dashboard_tests.md). Test không chứng minh training, chất lượng mô hình thật hoặc hoàn tất gán nhãn người.
 
-## PHẦN II: DESIGN — Thiết kế Chi tiết
+## PHẦN II: DESIGN — Theo code hiện tại
 
-### 2.1. Kiến trúc
+### 2.1. Luồng thực thi
 
-```text
-app/streamlit_dashboard.py
-    │
-    ├── load_data() ──► reports/model_summary.csv, reports/test_predictions.csv (hoặc _with_text)
-    │
-    ├── sidebar_controls()
-    │       ├── select_model: radio ["baseline", "bert", "distilbert", "roberta"] (chỉ các mô hình có cột pred_*)
-    │       ├── filter_stars: multiselect [1,2,3,4,5] (mặc định chọn hết)
-    │       └── sort_by_error: checkbox "Sắp xếp theo sai số giảm dần"
-    │
-    ├── filter_data(df, model, stars) ──► DataFrame đã lọc
-    │
-    ├── compute_per_star(filtered_df, model) ──► src.metrics.per_star_metrics
-    │
-    ├── render_comparison_table(model_summary_df)
-    │
-    ├── render_scatter(filtered_df, model)
-    │
-    ├── render_error_distribution(filtered_df, model)
-    │
-    ├── render_per_star_table(per_star_dict)
-    │
-    └── render_worst_cases(filtered_df, model) ──► Top-10 abs_err, expander chi tiết
-```
+`main()` cấu hình trang/sidebar thư mục → `load_data()` → cảnh báo metadata → bảng so sánh → radio model/multiselect sao/checkbox sort → `filter_predictions()` → bỏ dự đoán thiếu, sort nếu bật → scatter/histogram trong hai cột → per-star → Top-10/chi tiết → expander tất cả dự đoán đang lọc.
 
-### 2.2. Schema dữ liệu đầu vào
+Không có hàm `sidebar_controls()` riêng, `st.tabs` hay `@st.cache_data`; CSV được đọc lại khi app chạy lại.
 
-**`reports/model_summary.csv`** (theo `docs/design.md` §9.9.3):
-| Cột | Kiểu | Ghi chú |
-| :--- | :--- | :--- |
-| `model` | string | `mean_predictor`, `baseline`, `bert`, `distilbert`, `roberta` |
-| `mae`, `rmse`, `rmse_raw`, `r2`, `pearson`, `spearman`, `macro_mae` | float | Trống nếu model thiếu |
-| `train_seconds`, `seconds_per_epoch` | float | Trống cho mean_predictor, baseline |
-| `params_total` | int | Baseline = số hệ số Ridge |
-| `rmse_reduction_vs_baseline_pct` | float | Trống cho mean_predictor, baseline |
-| `inference_seconds` | float | Trống nếu model thiếu |
-| `split_id` | string | 12 chars |
+### 2.2. Schema đầu vào và validation
 
-**`reports/test_predictions.csv`** (theo `docs/design.md` §4):
-| Cột | Kiểu | Ghi chú |
-| :--- | :--- | :--- |
-| `review_id` | string | Primary key |
-| `true_stars` | int | 1-5 |
-| `n_tokens` | int | Tokenizer BERT, không cắt |
-| `split_id` | string | Validation merge |
-| `pred_baseline`, `pred_bert`, `pred_distilbert`, `pred_roberta` | float | Chỉ các mô hình có kết quả; đã clip 1.0-5.0 |
-| `abs_err_baseline`, `abs_err_bert`, `abs_err_distilbert`, `abs_err_roberta` | float | Tương ứng |
+**`model_summary.csv`:**
 
-**`reports/test_predictions_with_text.csv`**: Các cột trên + `text` (sau `review_id`).
+| Cột | Cách sử dụng |
+| :--- | :--- |
+| `model` | Bắt buộc, không null, không trùng tên. Không ép đủ 5 dòng. |
+| `mae`, `rmse`, `rmse_raw`, `r2`, `pearson`, `spearman`, `macro_mae` | Hiển thị khi có giá trị. Error Analysis cần `rmse` Test để chọn model hợp lệ tốt nhất. |
+| `train_seconds`, `seconds_per_epoch`, `params_total`, `rmse_reduction_vs_baseline_pct`, `inference_seconds` | Hiển thị khi có giá trị; không tự ước lượng chi phí. |
+| `split_id` | Đọc dạng chuỗi; đối chiếu predictions nếu cả hai file có cột này, không đưa vào bảng so sánh. |
 
-### 2.3. Giao diện hàm chính
+**Hai bản predictions:**
 
-```python
-# app/streamlit_dashboard.py
+| Cột | Kiểm tra của Dashboard |
+| :--- | :--- |
+| `review_id` | Bắt buộc, duy nhất, không null; đọc dạng chuỗi để giữ số 0 đầu ID. Bảng không được rỗng. |
+| `true_stars` | Bắt buộc, giá trị nguyên 1–5. |
+| `pred_<model>` | Giá trị không null phải trong [1, 5]; cho phép thiếu dự đoán một số dòng. |
+| `abs_err_<model>` | Bắt buộc cho mỗi `pred_*`, kể cả `pred_mean_predictor` nếu có; cùng vị trí null và khớp sai số tuyệt đối (`atol=2e-6`, `rtol=0`). |
+| `n_tokens` | Có thể thiếu ở Dashboard; nếu có phải hữu hạn, nguyên không âm. Hợp đồng dữ liệu: số token BERT trước cắt, ngưỡng >254 cho cờ cắt. |
+| `split_id` | Có thể thiếu ở Dashboard; nếu có phải không null và duy nhất. Hợp đồng quy định 12 ký tự; Dashboard không kiểm tra độ dài. |
+| `text` | Bắt buộc có cột khi đọc `_with_text`; Dashboard cho phép giá trị thiếu. Error Analysis cần nội dung không rỗng ở mọi review. |
 
-def load_data(reports_dir: str = "reports") -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Đọc model_summary.csv và test_predictions.csv (ưu tiên _with_text nếu có).
-    Trả về (summary_df, preds_df).
-    """
+Schema production vẫn cần `n_tokens` và `split_id` theo tài liệu Design mục 4/9.9.1; việc Dashboard cho phép thiếu chỉ hỗ trợ xem output chưa đầy đủ.
 
-def filter_predictions(preds_df: pd.DataFrame, model: str, stars: list[int]) -> pd.DataFrame:
-    """
-    Lọc preds_df theo true_stars trong stars; trả về bản sao.
-    """
+### 2.3. Giao diện hàm hiện có
 
-def get_model_columns(preds_df: pd.DataFrame) -> list[str]:
-    """
-    Trả về danh sách các mô hình có cột pred_* trong preds_df (bỏ qua mean_predictor).
-    """
+| Hàm | Kết quả/hành vi |
+| :--- | :--- |
+| `get_model_columns(preds_df)` | Hậu tố model của `pred_*` theo thứ tự cột, loại `mean_predictor`. |
+| `validate_predictions(df)` | Kiểm tra mục 2.2, không sửa DataFrame. |
+| `load_data(reports_dir="reports")` | Trả `(summary_df, preds_df)`; không trả `has_text`. |
+| `filter_predictions(preds_df, model, stars)` | Bản sao lọc sao, không tự sort/bỏ dự đoán null. |
+| `comparison_table(summary_df)` | Bản sao các cột được hiển thị. |
+| `compute_per_star(preds_df, model)` | `(table, macro_mae)`, bảng gồm `stars`, `mae`, `rmse`, `n`. |
+| `get_worst_cases(preds_df, model, top_k=10)` | DataFrame Top-k, giữ text trực tiếp từ cùng dòng nếu có. |
+| `render_comparison_table`, `render_scatter_plot`, `render_error_histogram`, `render_per_star_metrics`, `render_worst_cases` | Hiển thị bằng Streamlit, không trả DataFrame. |
+| `main()` | Điều phối toàn bộ trang. |
 
-def render_comparison_table(summary_df: pd.DataFrame) -> None:
-    """
-    Hiển thị bảng so sánh Streamlit (st.dataframe).
-    Chỉ hiện các cột có ít nhất một giá trị không null.
-    """
+### 2.4. Metrics và Top-k
 
-def render_scatter_plot(preds_df: pd.DataFrame, model: str) -> None:
-    """
-    Scatter true_stars vs pred_<model> (st.altair_chart hoặc st.scatter_chart).
-    """
+`compute_per_star()` gọi `per_star_metrics(y_true, y_pred)` với clipping mặc định, không truyền keyword `clip`. Chỉ sao có mẫu xuất hiện trong bảng; Macro-MAE là trung bình MAE các sao đó.
 
-def render_error_histogram(preds_df: pd.DataFrame, model: str) -> None:
-    """
-    Histogram abs_err_<model> (st.bar_chart hoặc altair).
-    """
-
-def render_per_star_metrics(preds_df: pd.DataFrame, model: str) -> None:
-    """
-    Gọi src.metrics.per_star_metrics(y_true, y_pred) và hiển thị bảng.
-    """
-
-def render_worst_cases(preds_df: pd.DataFrame, model: str, top_k: int = 10) -> None:
-    """
-    Top-k abs_err_<model> lớn nhất; expander cho mỗi dòng hiển thị text (nếu có).
-    """
-
-def main() -> None:
-    """
-    Entry point: st.set_page_config, load_data, sidebar, render all sections.
-    """
-```
-
-### 2.4. Logic xử lý chi tiết
-
-**Tự dò file input:**
-```python
-preds_path = Path("reports/test_predictions.csv")
-preds_with_text_path = Path("reports/test_predictions_with_text.csv")
-if preds_with_text_path.exists():
-    preds_df = pd.read_csv(preds_with_text_path)
-    has_text = True
-else:
-    preds_df = pd.read_csv(preds_path)
-    has_text = False
-```
-
-**Xác định mô hình có mặt:**
-```python
-model_cols = [c for c in preds_df.columns if c.startswith("pred_") and c != "pred_mean_predictor"]
-models = [c.replace("pred_", "") for c in model_cols]  # ["baseline", "bert", ...]
-```
-
-**Per-star metrics (dùng src.metrics):**
-```python
-from src.metrics import per_star_metrics
-y_true = filtered_df["true_stars"].values
-y_pred = filtered_df[f"pred_{model}"].values
-result = per_star_metrics(y_true, y_pred, clip=True)  # {"per_star": {...}, "macro_mae": float}
-```
-
-**Top-k worst cases:**
-```python
-err_col = f"abs_err_{model}"
-worst = filtered_df.nlargest(top_k, err_col)[["review_id", "true_stars", f"pred_{model}", err_col]]
-if has_text:
-    worst = worst.merge(preds_df[["review_id", "text"]], on="review_id")
-```
+`get_worst_cases()` dùng `nlargest(top_k, abs_err_<model>)`; kiểm tra `top_k >= 1`, có thể trả ít hơn k nếu không đủ mẫu. `render_worst_cases()` reset index trước khi dùng vị trí dòng từ `event.selection.rows`, còn selectbox là lựa chọn khi chưa chọn dòng.
 
 ### 2.5. Ngoại lệ
 
-| Hàm | Ngoại lệ |
+| Nơi xử lý | Hành vi |
 | :--- | :--- |
-| `load_data` | `FileNotFoundError` nếu thiếu `model_summary.csv` hoặc `test_predictions.csv` |
-| `filter_predictions` | `ValueError` nếu `model` không có cột `pred_<model>` hoặc `stars` rỗng |
-| `render_*` | `KeyError` nếu cột kỳ vọng không có trong DataFrame (bug dữ liệu) |
+| `load_data()` | Truyền lỗi filesystem/CSV ra ngoài; `ValueError` khi schema, giá trị, split hoặc cột text không hợp lệ. |
+| `filter_predictions()` | `ValueError` khi không có cột model, sao rỗng hoặc ngoài 1–5. |
+| `get_worst_cases()` | `ValueError` nếu `top_k < 1`. |
+| `main()` | Bắt `OSError`, `ValueError`, `TypeError`, `ParserError` trong lúc load; hiển thị lỗi/hướng dẫn rồi trả về. |
 
-### 2.6. Tích hợp với các module khác
+### 2.6. Tích hợp
 
-| Module | Cách phối hợp |
-| :--- | :--- |
-| `metrics.py` (`02`) | Gọi `per_star_metrics` để tính lại MAE/RMSE per-star + Macro-MAE tại runtime (đảm bảo khớp `model_summary.csv`). Không gọi `compute_metrics` hay `build_model_summary`. |
-| `data_setup.py` (`01`) | Không import trực tiếp; `text` trong `with_text` version lấy từ `test.parquet` qua `merge_test_predictions` của `04`. |
-| `engine.py`, `model_builder.py` | Không import (dashboard không cài `torch`). |
+- B — `src.metrics`: chỉ import `per_star_metrics`; không sửa module B.
+- F — `src.predict`: xuất hai bản predictions; E chỉ đọc CSV, không import module suy luận. Blocker ở mục 2.8.
+- A — Data: không import trực tiếp; text gắn theo `review_id` của Test.
+- Leader/C: Leader training/xuất kết quả, C validate output trước E hoàn tất phân tích thật.
 
-### 2.7. Quyết định thiết kế và điểm mở
+### 2.7. Môi trường
 
-| Hạng mục | Quyết định |
-| :--- | :--- |
-| Công cụ: Streamlit | Đã chốt (Design §9.1) |
-| Đọc CSV từ `reports/` (GitHub) + tự dò `_with_text` (Drive/local) | Đã chốt (Design §9.2, §5) |
-| Không nhập review mới dự đoán | Ngoài phạm vi (Design §5) |
-| Tính per-star tại runtime bằng `src.metrics` | Đã chốt (đảm bảo số khớp báo cáo) |
-| `app/requirements.txt`: streamlit, pandas, numpy, scipy; **không torch** | Đã chốt (Design §5, §8) |
-| Chạy từ repo root: `streamlit run app/streamlit_dashboard.py` | Đã chốt (Design §5) |
-| Biểu đồ: Altair hoặc Streamlit native | Đề xuất; Altair cho tương tác tốt hơn |
-| Caching: `@st.cache_data` cho `load_data` | Đề xuất, tránh đọc lại CSV khi tương tác |
-| Layout: `st.tabs` hoặc `st.expander` cho các section | Đề xuất |
+`app/requirements.txt`: `streamlit>=1.50,<2`, `pandas>=2,<3`, `numpy>=1.24,<3`, `scipy>=1.10,<2`. Scatter dùng Vega-Lite qua Streamlit, không thêm dependency chart riêng.
+
+Dashboard không import `torch`, nhưng `tests/conftest.py` hiện import `torch` ở cấp module nên pytest của repo cần dependency này khi collection. E không sửa fixture chung trong đợt này. Test import dùng subprocess riêng để kiểm tra Dashboard không nạp `torch`.
+
+### 2.8. Error Analysis và blocker
+
+`scripts/error_analysis.py` giữ hai lệnh hiện có:
+
+```powershell
+python -m scripts.error_analysis prepare --reports-dir reports
+python -m scripts.error_analysis summarize --reports-dir reports
+```
+
+Đây là quy trình sau khi có dữ liệu thật đã validate; đợt này chỉ chạy workflow bằng fixture pytest trong thư mục tạm. `--output-dir` cho phép tách worksheet khỏi nguồn CSV.
+
+1. `prepare` chọn model có RMSE Test hữu hạn, không âm thấp nhất; hòa điểm thì theo tên model. Model tốt nhất thiếu dự đoán thì dừng, không thay model khác. Lấy 20 worst và 20 random (4/sao) ngoài top-20, sort ID trước sampling, seed=42; thiếu quota thì dừng.
+2. Xuất `error_sample.csv`, `error_sample_with_text.csv`, `error_analysis.csv`, `leader_crosscheck_with_text.csv`, `error_analysis_manifest.json`. Nhãn/notes để trống; worksheet Leader có 4 review cố định và không chứa nhãn E. Không ghi đè file chuẩn bị đã tồn tại.
+3. E đọc text, gán một trong `Nhãn nhiễu`, `Cảm xúc lẫn lộn`, `Bị cắt 256 token`, `Mỉa mai`, `Khác`, kèm notes có bằng chứng. Không sửa dữ liệu gốc; nhóm cắt chỉ hợp lệ khi `n_tokens > 254`. Cờ token không tự chứng minh cắt gây lỗi.
+4. Leader gán độc lập đúng 4 review; `summarize` kiểm tra manifest, đủ 40 nhãn/notes và agreement ít nhất 3/4 (75%) trước khi ghi tổng hợp.
+5. Script hiện xuất `error_group_summary.csv`, `error_analysis_summary.md` trong output-dir. Chưa tạo báo cáo thật trong repo ở đợt này; không thêm tài liệu Markdown mới hay khôi phục guide đã bị main xóa.
+
+**Blocker F:** `src/predict.py::merge_test_predictions()` hiện khởi tạo bảng bằng `review_id`/`true_stars`, thêm `pred_*`/`abs_err_*` rồi text; không tính/đưa `n_tokens` và `split_id` vào hai CSV cuối. `export_test_predictions()` cũng chưa đưa hai cột này vào CSV từng model. Error Analysis sẽ dừng bằng `ValueError` khi dùng output này. E không điền metadata giả, bỏ kiểm tra hoặc sửa code F.
+
+**Phối hợp:** F bổ sung số token BERT trước cắt theo quy ước ngưỡng 254 (không tính hai token đặc biệt), truyền/kiểm tra `split_id` đúng lần chia và xuất đủ metadata ở cả hai bản CSV. Leader cung cấp kết quả training thật; C xác nhận schema/ID/nhãn/split. Sau đó E mới `prepare`, gán nhãn người, nhận Leader cross-check và `summarize`. Theo dõi tại [status_thanh_vien_e.md](../analysts/status_thanh_vien_e.md).

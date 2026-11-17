@@ -117,7 +117,7 @@ def render_error_histogram(preds_df: pd.DataFrame, model: str) -> None:
 
 
 def compute_per_star(preds_df: pd.DataFrame, model: str) -> tuple[pd.DataFrame, float]:
-    # Current src.metrics already clips internally and accepts only two arguments.
+    # Use the default clipping in src.metrics, shared with evaluation.
     result = per_star_metrics(preds_df.true_stars.to_numpy(), preds_df[f"pred_{model}"].to_numpy())
     table = pd.DataFrame([{"stars": star, **values} for star, values in result["per_star"].items()],
                          columns=["stars", "mae", "rmse", "n"])
