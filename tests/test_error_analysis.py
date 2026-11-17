@@ -42,6 +42,18 @@ def test_need_text(reports):
         sample_reviews(summary, preds.drop(columns='text'))
 
 
+@pytest.mark.parametrize('missing_metadata', [
+    ['n_tokens'], ['split_id'], ['n_tokens', 'split_id'],
+])
+def test_prepare_requires_producer_metadata(reports, missing_metadata):
+    path = reports / 'test_predictions_with_text.csv'
+    pd.read_csv(path).drop(columns=missing_metadata).to_csv(path, index=False)
+    output = reports.parent / 'analysis'
+    with pytest.raises(ValueError, match='n_tokens và split_id'):
+        prepare(str(reports), str(output))
+    assert not output.exists()
+
+
 def test_insufficient_strata(reports):
     summary, preds = load_data(reports)
     with pytest.raises(ValueError, match='sao 1'):
@@ -96,7 +108,7 @@ def test_complete_workflow_requires_agreement(reports, sample):
     assert not (reports / 'error_analysis_summary.md').exists()
     leader.loc[2, 'leader_error_group'] = 'Khác'
     leader.to_csv(reports / 'leader_crosscheck_with_text.csv', index=False)
-    assert '3/4 = 75%' in summarize(str(reports)).read_text()
+    assert '3/4 = 75%' in summarize(str(reports)).read_text(encoding='utf-8')
     stats = pd.read_csv(reports / 'error_group_summary.csv')
     assert stats.n.sum() == 40 and stats.pct.sum() == 100
     assert stats.error_group.tolist() == GROUPS

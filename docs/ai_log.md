@@ -144,4 +144,37 @@
 - Bổ sung scripts/error_analysis.py thay vì sửa module metrics của B. Các CLI `src.metrics --sample-errors` trong design chưa được hiện thực; guide đưa lệnh thực chạy được.
 - Loại top-20 khỏi random pool để có đúng 40 review duy nhất; sort ID trước random, seed=42, thiếu 4/sao thì báo lỗi.
 - merge_test_predictions hiện thiếu n_tokens/split_id: dashboard chấp nhận kèm cảnh báo; Error Analysis cần đầy đủ, chờ D/F cung cấp đúng schema.
-\# AI Log
+
+---
+
+## Phase 6 - 2026-11-17 - E (Xử lý feedback Dashboard/Error Analysis)
+
+### Prompt
+> Đối chiếu feedback E với assignments, spec/test plan và code Dashboard/Error Analysis; cập nhật tài liệu đã hiện thực, kiểm tra blocker n_tokens/split_id thuộc F, chỉ sửa phạm vi E, không tạo Markdown mới ngoài docs/analysts, không bịa training/annotation/cross-check và không commit/push/PR. Chạy `python -m pytest tests/test_dashboard.py tests/test_error_analysis.py -q`.
+
+### Thay đổi thực hiện
+- Sửa tại chỗ `docs/define&designt/05_dashboard.md`: Đã hiện thực; đường dẫn, API/helper, CSV validation, UI, histogram/Vega-Lite, metrics theo bộ lọc và quy trình Error Analysis đúng code hiện tại.
+- `docs/tests/05_dashboard_tests.md` đã tồn tại, trái nhận định trong feedback cũ. Đồng bộ fixture 200 review/5 model trong tmp_path, tên test thực, giá trị trả về, AppTest/assertion/version, coverage và lệnh chạy; không tạo file test plan mới.
+- Mở rộng test metadata Dashboard thành 3 trường hợp thiếu riêng/tất cả: loader/UI vẫn hiển thị và cảnh báo. Thêm 3 case Error Analysis `prepare` phải dừng trước khi tạo worksheet khi thiếu metadata.
+- Sửa test workflow đọc summary bằng `read_text(encoding='utf-8')` để tránh lỗi cp1252 trên Windows; script đã ghi UTF-8 đúng nên không đổi.
+- Sửa duy nhất comment lỗi thời trong `app/streamlit_dashboard.py::compute_per_star`, giữ lời gọi clipping mặc định và API. Không cần đổi `scripts/error_analysis.py` vì code hiện có đã chặn metadata thiếu.
+- Cập nhật `docs/analysts/status_thanh_vien_e.md` theo bằng chứng hiện tại, bỏ kết luận stale về test plan và không xác nhận lại lịch sử PR/merge chưa kiểm chứng.
+
+### Smoke Test
+- Python mặc định thiếu pytest/dependency. Tạo `.venv` được gitignore; cài dependency từ `app/requirements.txt`, pytest và torch CPU do `tests/conftest.py` hiện import torch khi collection. Không sửa fixture chung. Một lần collection trước lúc cài torch hoàn tất báo thiếu `torch.utils`; chạy lại sau khi cài đủ.
+- Lần chạy suite trước sửa encoding: **1 failed, 43 passed in 49.88s**; lỗi `UnicodeDecodeError` ở test đọc summary UTF-8 bằng encoding mặc định Windows.
+- Sau sửa encoding, chạy lại từ repo root, đặt `.venv/Scripts` lên đầu PATH: `python -m pytest tests/test_dashboard.py tests/test_error_analysis.py -q` → **44 passed in 17.50s**, exit code 0 (26 Dashboard + 18 Error Analysis).
+- Môi trường kiểm chứng: Python 3.12.10, pytest 9.2.0, Streamlit 1.67.0, torch 2.15.0+cpu. Test subprocess xác nhận import Dashboard không nạp torch; không tuyên bố môi trường không cài torch.
+- Kiểm tra bằng AST: tên test ghi trong test plan khớp hai file test; link tương đối trong spec/test plan tồn tại.
+- Không chạy suite module khác; mọi dữ liệu/annotation/cross-check trong test là synthetic ở thư mục tạm.
+
+### Run Model
+- Không chạy training hoặc inference thật. `reports/` hiện chỉ có `.gitkeep`; chưa có CSV production để phân tích.
+- Chưa gán nhãn người 40 review, chưa Leader cross-check và chưa tạo báo cáo Error Analysis thật.
+
+### Check Description / Blocker
+- [x] Đối chiếu code trước khi sửa; spec/test plan đồng bộ hành vi thực tế; không thêm Markdown hoặc khôi phục guide đã bị main xóa.
+- [x] Giữ API và phạm vi E; không sửa `src/predict.py` hoặc module thành viên khác; không commit/push/tạo PR.
+- [x] Đọc `src/predict.py`: export CSV từng model chưa có n_tokens/split_id; merge chỉ thêm ID/nhãn/dự đoán/sai số/text nên hai CSV cuối cũng thiếu metadata. `sample_reviews` của E bắt buộc cả hai, không được thay bằng dữ liệu giả.
+- [ ] F bổ sung n_tokens BERT trước cắt (quy ước ngưỡng >254, không tính hai token đặc biệt), truyền/validate split_id đúng lần chia và xuất đủ hai bản CSV.
+- [ ] Leader training/xuất dữ liệu thật → C validate schema/ID/nhãn/split → E prepare và gán nhãn 40 review → Leader gán độc lập 4 review → E summarize sau agreement ≥75%.

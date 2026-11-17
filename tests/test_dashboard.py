@@ -154,11 +154,23 @@ def test_no_torch_import():
     subprocess.run([sys.executable, '-c', "import sys; import app.streamlit_dashboard; assert 'torch' not in sys.modules"], cwd=d.ROOT, check=True)
 
 
-def test_legacy_producer_metadata_is_optional(reports):
+@pytest.mark.parametrize('missing_metadata', [
+    ['n_tokens'], ['split_id'], ['n_tokens', 'split_id'],
+])
+def test_legacy_producer_metadata_is_optional(reports, monkeypatch, missing_metadata):
     path = reports / 'test_predictions_with_text.csv'
-    df = pd.read_csv(path).drop(columns=['n_tokens', 'split_id'])
+    df = pd.read_csv(path).drop(columns=missing_metadata)
     df.to_csv(path, index=False)
     assert len(d.load_data(reports)[1]) == 200
+    monkeypatch.setenv('YELP_REPORTS_DIR', str(reports))
+    at = AppTest.from_file(d.__file__).run(timeout=30)
+    assert not at.exception and len(at.radio) == 1
+    warnings = [warning.value for warning in at.warning if 'CSV chưa đủ metadata' in warning.value]
+    assert len(warnings) == 1
+    assert all(column in warnings[0] for column in missing_metadata)
+    assert 'Error Analysis' in warnings[0]
+    assert len(at.dataframe[0].value) == 5
+    assert len(at.dataframe[2].value) == 10
 
 
 def test_selected_table_row_opens_detail(preds, monkeypatch):

@@ -1,93 +1,68 @@
-# Báo Cáo Trạng Thái Công Việc — Thành Viên E (Dashboard / Error Analysis)
-**Người thực hiện:** Thành viên E — Dashboard + Error Analysis
-**Ngày đánh giá:** 2026-11-15
-**Nhánh:** `feature-cuong` → PR #5 → `develop` (sau đó develop → main qua merge hợp nhất)
+# Báo cáo trạng thái — Thành viên E (Dashboard / Error Analysis)
 
----
+**Cập nhật:** 2026-11-17
 
-## 1. Tổng quan trạng thái
+**Nhánh:** `feature-cuong`
 
-| Phần | Module | Trạng thái | Mức hoàn thành |
-| :--- | :--- | :---: | :---: |
-| **Dashboard** | `app/streamlit_dashboard.py` | ✅ Hoàn thành | 100% |
-| **Error Analysis (code)** | `scripts/error_analysis.py` | ✅ Code xong, **chưa chạy** | 100% code / 0% execution |
-| Test | `test_dashboard.py`, `test_error_analysis.py` | ✅ 39 pass | 100% |
+**Phạm vi:** `plans/assignments.md` mục 7; chỉ sửa file E và tài liệu liên quan trực tiếp.
 
-**Kết luận nhanh:** Dashboard là deliverable **hoàn chỉnh xuất sắc** (đủ FR-1→FR-10, 24 test, không torch). Error Analysis code xong nhưng **execution 0%** — bị chặn bởi gap `n_tokens`/`split_id` của F + cần data thật + gán nhãn người. E là thành viên **duy nhất** làm đúng quy trình PR (→ develop) và có AI log **chính xác**.
+## 1. Trạng thái sau đối chiếu feedback
 
----
+| Hạng mục | Kết luận có bằng chứng |
+| :--- | :--- |
+| Dashboard | Đã hiện thực FR-1–FR-10; kiểm chứng bằng CSV tổng hợp/AppTest. Chưa demo với kết quả training thật. |
+| Error Analysis | Có code sampling, validation, cross-check và tổng hợp; workflow được test bằng fixture. Chưa thực hiện phân tích/gán nhãn người trên dữ liệu thật. |
+| Tài liệu | Spec chuyển sang Đã hiện thực, đồng bộ code. Test plan đã tồn tại tại `docs/tests/05_dashboard_tests.md`, được sửa tại chỗ. |
+| Kiểm thử | **44 passed in 17.50s**: 26 case Dashboard + 18 case Error Analysis. |
+| Dữ liệu hiện có | `reports/` chỉ có `.gitkeep` tại lần rà soát; không có CSV production để xác nhận kết quả mô hình. |
 
-## 2. Dashboard — `app/streamlit_dashboard.py` (220 dòng)
+## 2. Feedback đã xử lý
 
-| FR | Yêu cầu | Trạng thái | Dẫn chứng |
-| :--- | :--- | :---: | :--- |
-| FR-1 | Đọc CSV, auto-detect `_with_text` | ✅ | `streamlit_dashboard.py:56-72` |
-| FR-2 | Bảng so sánh, blank khi thiếu metric | ✅ | `:83-91` |
-| FR-3 | Scatter Pred vs True + identity line | ✅ | `:94-109` |
-| FR-4 | Histogram error | ✅ | `:112-116` |
-| FR-5 | Per-star MAE/RMSE/n + Macro-MAE qua `src.metrics` | ✅ | `:119-133` |
-| FR-6 | Filter model/stars/sort | ✅ | `:189-204` |
-| FR-7 | Top-10 worst cases + filter | ✅ | `:136-164` |
-| FR-8 | Detail view (click → text) | ✅ | `:158-164` |
-| FR-9 | Không import torch | ✅ | `test_no_torch_import` |
-| FR-10 | Chạy từ repo root | ✅ | `:6-8` |
+| Feedback/vấn đề | Đối chiếu và thay đổi |
+| :--- | :--- |
+| Spec vẫn Bản nháp | Sửa `docs/define&designt/05_dashboard.md`: trạng thái, đường dẫn, hàm thực có, CSV validation, widget/detail view, histogram/Vega-Lite, per-star theo bộ lọc, metadata và phụ thuộc. Bỏ mô tả caching/layout chỉ mới đề xuất. |
+| Báo cáo nói không có test plan | Nhận định cũ không còn đúng. `docs/tests/05_dashboard_tests.md` đã có; sửa đường dẫn, fixture, tên test, API trả về, AppTest/version, ma trận coverage và lệnh chạy, không tạo test plan mới. |
+| Dashboard khi thiếu metadata | Code đã cho phép thiếu và cảnh báo. Mở rộng test cho thiếu riêng `n_tokens`, riêng `split_id`, cả hai: loader/UI vẫn có bảng/model/Top-10 và cảnh báo đúng. |
+| Error Analysis cần metadata | Code đã dừng khi thiếu một trong hai cột. Thêm 3 case `prepare` từ chối input thiếu metadata và không tạo thư mục worksheet; không nới điều kiện hoặc sửa producer F. |
+| Lỗi kiểm thử trên Windows | Lần chạy phát hiện `UnicodeDecodeError`: test đọc summary UTF-8 bằng encoding mặc định cp1252. Sửa `read_text(encoding='utf-8')`; script đã ghi UTF-8 đúng nên không cần đổi. |
+| Chú thích dependency metrics lỗi thời | Sửa comment tại `compute_per_star`: sử dụng clipping mặc định; `src.metrics` hiện có tham số `clip`, không còn đúng khi nói chỉ nhận hai tham số. Không đổi lời gọi/API. |
+| Báo cáo/AI log | Cập nhật theo thay đổi và lệnh test thực chạy; không suy diễn trạng thái training, nhãn người hoặc lịch sử PR/merge. |
 
-**Điểm chất lượng:** vega-lite scatter có identity line; per-star tính runtime (khớp báo cáo); **robust khi thiếu `n_tokens`/`split_id`** — chỉ cảnh báo, vẫn chạy (`:180-183`).
+## 3. Blocker `n_tokens` / `split_id` — thuộc F
 
----
+Đã đọc `src/predict.py` để đối chiếu, **không sửa file này**:
 
-## 3. Error Analysis — `scripts/error_analysis.py` (189 dòng)
+- `export_test_predictions()` tạo CSV từng model gồm `review_id`, `true_stars`, `pred_raw`, `pred`; chưa xuất hai cột metadata.
+- `merge_test_predictions()` khởi tạo bảng bằng `review_id`/`true_stars`, thêm dự đoán/sai số và text; không tính/truyền `n_tokens` hay `split_id` vào hai bản CSV cuối. Việc có split trong nguồn metadata của summary không bổ sung cột cho predictions.
+- `scripts/error_analysis.py::sample_reviews()` bắt buộc có cả hai. `n_tokens` dùng xác định cờ >254, `split_id` dùng manifest và đối chiếu phiên dữ liệu. Dashboard có thể cảnh báo rồi chạy; Error Analysis không thể thay metadata bằng giá trị giả.
 
-| Thành phần | Trạng thái | Dẫn chứng |
-| :--- | :---: | :--- |
-| Sample 40 (20 worst + 20 random 4/sao) | ✅ | `:19-54` |
-| 5 nhóm annotate + validate | ✅ | `:15, 94-113` |
-| Leader cross-check 4 review ≥75% | ✅ | `:57-60, 116-125` |
-| `error_analysis.csv` + summary | ✅ | `:67-91, 128-172` |
-| **Chạy thực tế (gán nhãn 40 review + cross-check)** | ❌ 0% | Chờ data + annotate người |
+**Cách phối hợp để gỡ chặn:**
 
-**Điểm chất lượng:** seed=42 cố định; tách worst khỏi random pool (40 review duy nhất); **không lộ nhãn E cho Leader** (`:80-84`); chặn sửa dữ liệu gốc (`:103-105`); chặn "Bị cắt" khi `n_tokens≤254` (`:110-112`); agreement <75% → FAIL (`:141-142`).
+1. **F:** thống nhất schema với Leader theo tài liệu Design mục 4/9.9.1; xuất `n_tokens` từ tokenizer BERT trước cắt, theo quy ước không tính hai token đặc biệt cho ngưỡng 254; truyền/kiểm tra `split_id` đúng lần chia và giữ metadata ở cả hai CSV cuối.
+2. **Leader:** chạy training và cung cấp `model_summary.csv`, `test_predictions.csv`, bản `_with_text` thật.
+3. **C:** validate schema, ID/nhãn/split và kết quả xuất; thông báo output hợp lệ trước E phân tích.
+4. **E:** `prepare` → đọc/gán nhãn đủ 40 review kèm bằng chứng → **Leader** gán độc lập 4 review → `summarize` khi agreement ≥75%. Lệnh và file output được mô tả trong spec hiện có, mục 2.8.
 
----
+Chưa tạo `reports/error_analysis.csv` hoặc summary thật; chưa có nhãn E hay cross-check Leader thật. Không nhận PASS của workflow synthetic làm bằng chứng hoàn tất deliverable sau training.
 
-## 4. Test coverage — Đầy đủ (39 test, khớp AI log)
+## 4. Kiểm chứng thực hiện
 
-| File | Số test | Nội dung |
-| :--- | :---: | :--- |
-| `test_dashboard.py` | 24 case | load_data, filter, per-star khớp source, worst-case, charts, validate, AppTest click/chi tiết, no-torch |
-| `test_error_analysis.py` | 15 case | 40 unique/4-sao, seed tái lập, thiếu text/strata, no-overwrite, 7 mutation nhãn, crosscheck 75% |
+Chạy từ repo root, đưa `.venv/Scripts` lên đầu PATH để `python` dùng môi trường riêng:
 
-→ AI log Phase 6 ghi **"39 passed"** — **chính xác** (khác D/F bị stale).
+```powershell
+python -m pytest tests/test_dashboard.py tests/test_error_analysis.py -q
+```
 
----
+**Kết quả cuối:** `44 passed in 17.50s` (exit code 0), Python 3.12.10, pytest 9.2.0, Streamlit 1.67.0, torch CPU 2.15.0+cpu.
 
-## 5. Các điểm cần lưu ý
+- Python mặc định ban đầu thiếu `pytest` và dependency; đã tạo `.venv` (gitignore) và cài dependency Dashboard/pytest, torch CPU phục vụ fixture chung. Một lần collection khi torch chưa cài xong lỗi thiếu `torch.utils`; chạy lại sau khi cài đủ.
+- Lần suite trước sửa encoding: `1 failed, 43 passed in 49.88s`; sau khi chỉ định UTF-8, chạy lại nguyên lệnh và đạt kết quả cuối ở trên.
+- `tests/conftest.py` hiện import torch khi collection; không sửa fixture chung. `test_no_torch_import` chạy subprocess riêng chứng minh import Dashboard không nạp torch, không tuyên bố cả môi trường không cài torch.
+- Đối chiếu tên test trong test plan bằng AST và kiểm tra các link tương đối trong hai tài liệu: hợp lệ.
+- Không chạy suite module khác, production training/inference, gán nhãn thật hoặc cross-check thật.
 
-| # | Vấn đề | Chi tiết | Mức độ |
-| :-: | :--- | :--- | :---: |
-| 1 | **Error Analysis bị chặn bởi F** | `error_analysis.py:20-21` **bắt buộc** `n_tokens` + `split_id` → thiếu sẽ `ValueError`. F chưa xuất 2 cột này → error analysis không chạy được. | 🔴 Chặn |
-| 2 | **Error Analysis execution 0%** | Cần: F sửa schema → Leader training → C validate → E gán nhãn 40 review (người) → Leader cross-check. Đúng assignment ("SAU KHI LEADER TRAINING XONG"). | 🟡 Chờ (expected) |
-| 3 | **Spec `05_dashboard.md` vẫn "Bản nháp"** | Code đã hiện thực nhưng spec vẫn ghi "Pre-implementation" → nên cập nhật "Đã hiện thực". | 🟡 Tài liệu |
-| 4 | **Không có `05_dashboard_tests.md`** | Assignment tham chiếu file này nhưng không tồn tại — E viết test không có test plan chính thức. | 🟢 Ghi chú |
-| 5 | **PR #5 → develop (ĐÚNG)** | `feature-cuong` → PR #5 → **develop** (rồi develop → main). E là **duy nhất** merge đúng develop. | ✅ Tốt |
+## 5. Giới hạn thay đổi
 
----
+Chỉ sửa 7 file hiện có: `app/streamlit_dashboard.py` (comment), `tests/test_dashboard.py`, `tests/test_error_analysis.py`, `docs/define&designt/05_dashboard.md`, `docs/tests/05_dashboard_tests.md`, báo cáo này và `docs/ai_log.md`.
 
-## 6. Danh sách hành động cần cải thiện
-
-| # | Việc cần làm | Mức độ | Ghi chú |
-| :-: | :--- | :---: | :--- |
-| 1 | **Chờ F sửa `predict.py`** (n_tokens + split_id) để Error Analysis chạy được | 🔴 Chặn | Phụ thuộc F |
-| 2 | **Chạy Error Analysis sau khi có data thật**: `prepare` → gán nhãn 40 review → Leader cross-check → `summarize` | 🟠 Cao | Cần Leader training + C validate trước |
-| 3 | **Cập nhật spec `05_dashboard.md`** sang "Đã hiện thực" + bổ sung `05_dashboard_tests.md` | 🟡 Nên làm | |
-| 4 | **Cập nhật AI log** sau khi chạy error analysis thật (hiện Phase 6 đúng, chỉ thiếu bước execution) | 🟡 Nên làm | |
-| 5 | **PR/merge dashboard** khi có CSV thật + ảnh demo | 🟢 Thấp | |
-
----
-
-## 7. Kết luận
-
-- **Dashboard: XUẤT SẮC** — hoàn thành đủ FR-1→FR-10, 24 test, không torch, robust, UI đầy đủ. Dùng được ngay với CSV thật sau khi Leader training.
-- **Error Analysis code: HOÀN THÀNH** (15 test) — nhưng **execution 0%**: bị chặn bởi gap `n_tokens`/`split_id` của F + cần data thật + gán nhãn người + Leader cross-check.
-- **Điểm sáng:** E là thành viên **duy nhất** đúng quy trình PR (→ develop) và có **AI log chính xác** (39 pass khớp thực tế).
-- **Ưu tiên:** (1) F sửa `predict.py` → (2) E chạy error analysis sau khi có data + annotate → (3) cập nhật spec 05 + AI log.
+Không đổi API, không sửa module thành viên khác (bao gồm `src/predict.py`)
