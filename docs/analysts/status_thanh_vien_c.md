@@ -1,6 +1,6 @@
 # Báo Cáo Trạng Thái Công Việc — Thành Viên C (Model + Integration Test)
 **Người thực hiện:** Thành viên C — Model + Integration Test
-**Ngày đánh giá:** 2026-11-15
+**Ngày đánh giá:** 2026-11-18 (cập nhật từ 2026-11-15)
 **Nhánh:** `feature/model-builder` → `main` (PR #7); `feature/integration-test` → chưa tạo
 
 ---
@@ -10,9 +10,9 @@
 | Phần | Module | Trạng thái | Mức hoàn thành |
 | :--- | :--- | :---: | :---: |
 | **Model** | `src/model_builder.py` + `tests/test_model_builder.py` | ✅ Hoàn thành (code + test) | ~85% |
-| **Integration Test** | `tests/test_integration.py`, `scripts/validate_outputs.py` | ❌ Chưa bắt đầu | 0% |
+| **Integration Test** | `tests/test_integration.py`, `scripts/validate_outputs.py`, `tests/test_integration_validation.py` | ✅ **Hoàn thành code + meta-test** | 100% code / 0% real data |
 
-**Kết luận nhanh:** Phần Model đã xong và đúng spec; phần Integration Test chưa có gì. Ngoài ra tồn tại **1 lỗi tích hợp chéo với F (predict.py)** phải xử lý trước khi Integration Test chạy được trên dữ liệu thật.
+**Kết luận nhanh:** Phần Model đã xong và đúng spec; phần Integration Test **code + meta-test đã hoàn thành** (commit `47df8d4`). Lỗi tích hợp chéo với F (`predict.py` thiếu `n_tokens`/`split_id`) **đã được F sửa** (commit `93875da`). Chỉ còn chờ data thật để chạy integration test thực tế.
 
 ---
 
@@ -50,34 +50,31 @@ File `tests/test_model_builder.py` chỉ có **9 hàm / 14 case**, trong khi k�
 
 ---
 
-## 3. Phần Integration Test — Vấn đề (0%)
+## 3. Phần Integration Test — **ĐÃ HOÀN THÀNH CODE + META-TEST**
 
-### 3.1 Code chưa viết (0%)
-| Cần có | Nguồn yêu cầu | Trạng thái |
-| :--- | :--- | :---: |
-| `scripts/validate_outputs.py` | `06_integration_test.md` §2.3 | ❌ Chưa có |
-| `tests/test_integration.py` | `06_integration_test.md` §2.4 | ❌ Chưa có |
-| `tests/test_integration_validation.py` (meta-test) | `06_integration_test_tests.md` | ❌ Chưa có |
-| Fixtures `valid_results_dir`, `corrupted_results_dir` | `06_integration_test_tests.md` §8 | ❌ Chưa có (`tests/fixtures/` không tồn tại) |
-| `scripts/sync_results.sh` | Design §3, Phase 0 | ❌ Chưa có |
+### 3.1 Code đã viết (100%)
+
+| Cần có | Nguồn yêu cầu | Trạng thái | File |
+| :--- | :--- | :---: | :--- |
+| `scripts/validate_outputs.py` | `06_integration_test.md` §2.3 | ✅ **XONG** | `scripts/validate_outputs.py` |
+| `tests/test_integration.py` | `06_integration_test.md` §2.4 | ✅ **XONG** | `tests/test_integration.py` |
+| `tests/test_integration_validation.py` (meta-test) | `06_integration_test_tests.md` | ✅ **XONG** | `tests/test_integration_validation.py` |
+| Fixtures `valid_results_dir`, `corrupted_results_dir` | `06_integration_test_tests.md` §8 | ✅ **XONG** | `tests/conftest.py` |
+| `scripts/sync_results.sh` | Design §3, Phase 0 | ❌ Chưa có | — |
 
 ### 3.2 Spec còn "Bản nháp"
-`06_integration_test.md` và `06_integration_test_tests.md` đều ghi trạng thái **"Bản nháp trước khi hiện thực"** → chưa được review/duyệt như spec 01–05.
+`06_integration_test.md` và `06_integration_test_tests.md` đều ghi trạng thái **"Bản nháp trước khi hiện thực"** → chưa được review/duyệt như spec 01–05. **Cần chốt spec sau khi review với Leader.**
 
-### 3.3 🔴 Lỗi tích hợp chéo F ↔ C: `predict.py` thiếu cột bắt buộc
+### 3.3 ✅ Lỗi tích hợp chéo F ↔ C: **ĐÃ KHẮC PHỤC**
 
-Spec 06 + Design §9.9.1 yêu cầu `test_predictions.csv` có `n_tokens` và `split_id`; `<model>_test.csv` có `split_id`. Nhưng `predict.py` **không ghi các cột này**:
-
-| File | Design/spec yêu cầu | `predict.py` thực tế ghi | Thiếu |
-| :--- | :--- | :--- | :--- |
-| `test_predictions.csv` | `review_id, true_stars, n_tokens, split_id, pred_*, abs_err_*` | `review_id, true_stars, [pred_baseline], pred_*, abs_err_*` (`predict.py:250-257`) | **`n_tokens`, `split_id`** |
-| `<model>_test.csv` | `review_id, true_stars, pred_raw, pred, split_id` | `review_id, true_stars, pred_raw, pred` (`predict.py:163-168`) | **`split_id`** |
-
-→ **Hệ quả:** `validate_outputs.py` viết đúng spec sẽ **FAIL** trên output thật của `predict.py` (thiếu `split_id` để check merge consistency, thiếu `n_tokens` để check schema). Đây là lỗi của **F**, không phải C — nhưng C cần phối hợp.
+F đã sửa `predict.py` (commit `93875da`):
+- `export_test_predictions()`: ghi `split_id` vào `<model>_test.csv` và meta JSON
+- `merge_test_predictions()`: thêm cột `n_tokens` (tokenizer BERT không cắt) + `split_id` vào `test_predictions.csv` và `test_predictions_with_text.csv`
+- `collect_summary_inputs()`: đọc được `split_id` từ `run_meta.json` và pred meta
 
 ### 3.4 Phụ thuộc dữ liệu (chặn phần "real data", KHÔNG chặn phần code)
 - `test_predictions.csv`, `model_summary.csv`, `split_stats.json`, `preds/*.csv` — **chưa có** (chờ training Phase 5). → `test_integration.py` (real data) không chạy được.
-- **Nhưng** `validate_outputs.py` + meta-test dùng **dữ liệu giả tổng hợp** → **có thể viết + test ngay, không bị chặn**.
+- **Nhưng** `validate_outputs.py` + meta-test dùng **dữ liệu giả tổng hợp** → **đã viết + test được ngay**.
 
 ### 3.5 Quy trình
 - Chưa có nhánh `feature/integration-test` (assignment ghi "ưu tiên merge sớm" — chưa thực hiện).
@@ -89,19 +86,17 @@ Spec 06 + Design §9.9.1 yêu cầu `test_predictions.csv` có `n_tokens` và `s
 
 | # | Việc cần làm | Mức độ | Ghi chú |
 | :-: | :--- | :---: | :--- |
-| 1 | **Phối hợp F sửa `predict.py`**: bổ sung `n_tokens` (tokenizer BERT, không cắt) + `split_id` vào `test_predictions.csv` và `<model>_test.csv` | 🔴 Chặn | Không có bước này thì Integration Test luôn FAIL trên data thật |
-| 2 | **Viết `scripts/validate_outputs.py`** theo spec 06 §2.3 (parse_args, load_all_data, check_merge_consistency, check_schemas, reconcile_metrics, check_dashboard_readiness, print_summary) | 🟠 Cao | Làm được ngay, không chờ data |
-| 3 | **Viết meta-test `tests/test_integration_validation.py`** + fixtures `valid_results_dir`/`corrupted_results_dir` theo 06_tests (11 kịch bản C1–C11) | 🟠 Cao | Chứng minh script tự bắt lỗi |
-| 4 | **Viết `tests/test_integration.py`** (real data) theo spec 06 §2.4 | 🟡 Chờ data | Chạy sau Phase 5 |
-| 5 | **Bổ sung test còn thiếu của Model**: M10, M12, M13, M15 (và M7, M8 nếu có thời gian) | 🟡 Nên làm | Nâng độ phủ test từ ~60% lên đủ |
-| 6 | **Chốt spec 06** (chuyển từ "Bản nháp" → "Đã chốt") sau khi review với Leader | 🟡 Nên làm | |
-| 7 | **Tạo `scripts/sync_results.sh`** (copy Drive → reports/) | 🟢 Thấp | Thuộc Phase 0, có thể để Leader làm |
-| 8 | **Tạo nhánh `feature/integration-test`** và merge vào đúng `develop` (theo quy trình) | 🟢 Thấp | |
+| 1 | **Bổ sung test còn thiếu của Model**: M10, M12, M13, M15 (và M7, M8 nếu có thời gian) | 🟠 Cao | Nâng độ phủ test từ ~60% lên đủ |
+| 2 | **Chạy integration test thật** khi có data thật (sau Phase 5 training) | 🟠 Cao | `python -m scripts.validate_outputs --results-dir reports/` + `pytest tests/test_integration.py` |
+| 3 | **Chốt spec 06** (chuyển từ "Bản nháp" → "Đã chốt") sau khi review với Leader | 🟡 Nên làm | |
+| 4 | **Tạo `scripts/sync_results.sh`** (copy Drive → reports/) | 🟢 Thấp | Thuộc Phase 0, có thể để Leader làm |
+| 5 | **Tạo nhánh `feature/integration-test`** và merge vào đúng `develop` (theo quy trình) | 🟢 Thấp | |
 
 ---
 
 ## 5. Kết luận
 
 - **Model:** Đạt yêu cầu (code đúng spec, 14/14 pass). Điểm cần cải thiện: bổ sung các test M10/M12/M13/M15 để bộ test đủ như kế hoạch.
-- **Integration Test:** Chưa bắt đầu (0%). Có thể khởi động ngay phần code + meta-test bằng dữ liệu giả (không chờ training). Điểm nghẽn lớn nhất là **lỗi tích hợp chéo F↔C** (predict.py thiếu `n_tokens`/`split_id`) — cần F sửa trước khi validate được trên dữ liệu thật.
-- **Ưu tiên số 1:** Phối hợp F sửa `predict.py` → sau đó C viết `validate_outputs.py` + meta-test.
+- **Integration Test:** **Code + meta-test HOÀN THÀNH** (100%). Đã có `validate_outputs.py`, `test_integration.py`, `test_integration_validation.py` với 11 kịch bản corruption (C1–C11). Chỉ chờ data thật để chạy validation thực tế.
+- **Lỗi tích hợp chéo F↔C:** **ĐÃ KHẮC PHỤC** — F đã sửa `predict.py` xuất đủ `n_tokens` + `split_id`.
+- **Ưu tiên tiếp theo:** (1) Bổ sung test Model còn thiếu; (2) Chạy integration test thật khi có data; (3) Chốt spec 06.

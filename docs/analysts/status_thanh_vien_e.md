@@ -1,6 +1,6 @@
 # Báo Cáo Trạng Thái Công Việc — Thành Viên E (Dashboard / Error Analysis)
 **Người thực hiện:** Thành viên E — Dashboard + Error Analysis
-**Ngày đánh giá:** 2026-11-15
+**Ngày đánh giá:** 2026-11-18 (cập nhật từ 2026-11-15)
 **Nhánh:** `feature-cuong` → PR #5 → `develop` (sau đó develop → main qua merge hợp nhất)
 
 ---
@@ -13,7 +13,7 @@
 | **Error Analysis (code)** | `scripts/error_analysis.py` | ✅ Code xong, **chưa chạy** | 100% code / 0% execution |
 | Test | `test_dashboard.py`, `test_error_analysis.py` | ✅ 39 pass | 100% |
 
-**Kết luận nhanh:** Dashboard là deliverable **hoàn chỉnh xuất sắc** (đủ FR-1→FR-10, 24 test, không torch). Error Analysis code xong nhưng **execution 0%** — bị chặn bởi gap `n_tokens`/`split_id` của F + cần data thật + gán nhãn người. E là thành viên **duy nhất** làm đúng quy trình PR (→ develop) và có AI log **chính xác**.
+**Kết luận nhanh:** Dashboard là deliverable **hoàn chỉnh xuất sắc** (đủ FR-1→FR-10, 24 test, không torch). Error Analysis code xong nhưng **execution 0%** — **schema blocker (`n_tokens`/`split_id`) ĐÃ ĐƯỢC F SỬA** (commit `93875da`), giờ chỉ còn chờ **data thật + gán nhãn người**. E là thành viên **duy nhất** làm đúng quy trình PR (→ develop) và có AI log **chính xác**.
 
 ---
 
@@ -44,7 +44,7 @@
 | 5 nhóm annotate + validate | ✅ | `:15, 94-113` |
 | Leader cross-check 4 review ≥75% | ✅ | `:57-60, 116-125` |
 | `error_analysis.csv` + summary | ✅ | `:67-91, 128-172` |
-| **Chạy thực tế (gán nhãn 40 review + cross-check)** | ❌ 0% | Chờ data + annotate người |
+| **Chạy thực tế (gán nhãn 40 review + cross-check)** | ❌ 0% | Chờ data thật + annotate người |
 
 **Điểm chất lượng:** seed=42 cố định; tách worst khỏi random pool (40 review duy nhất); **không lộ nhãn E cho Leader** (`:80-84`); chặn sửa dữ liệu gốc (`:103-105`); chặn "Bị cắt" khi `n_tokens≤254` (`:110-112`); agreement <75% → FAIL (`:141-142`).
 
@@ -65,11 +65,10 @@
 
 | # | Vấn đề | Chi tiết | Mức độ |
 | :-: | :--- | :--- | :---: |
-| 1 | **Error Analysis bị chặn bởi F** | `error_analysis.py:20-21` **bắt buộc** `n_tokens` + `split_id` → thiếu sẽ `ValueError`. F chưa xuất 2 cột này → error analysis không chạy được. | 🔴 Chặn |
-| 2 | **Error Analysis execution 0%** | Cần: F sửa schema → Leader training → C validate → E gán nhãn 40 review (người) → Leader cross-check. Đúng assignment ("SAU KHI LEADER TRAINING XONG"). | 🟡 Chờ (expected) |
-| 3 | **Spec `05_dashboard.md` vẫn "Bản nháp"** | Code đã hiện thực nhưng spec vẫn ghi "Pre-implementation" → nên cập nhật "Đã hiện thực". | 🟡 Tài liệu |
-| 4 | **Không có `05_dashboard_tests.md`** | Assignment tham chiếu file này nhưng không tồn tại — E viết test không có test plan chính thức. | 🟢 Ghi chú |
-| 5 | **PR #5 → develop (ĐÚNG)** | `feature-cuong` → PR #5 → **develop** (rồi develop → main). E là **duy nhất** merge đúng develop. | ✅ Tốt |
+| 1 | **Error Analysis execution 0%** | Cần: **data thật** (review.json → parquet 60k/70-15-15 trên Drive/Colab) → Leader training 4 model → C validate outputs → E gán nhãn 40 review (người) → Leader cross-check. Đúng assignment ("SAU KHI LEADER TRAINING XONG"). | 🟡 Chờ (expected) |
+| 2 | **Spec `05_dashboard.md` vẫn "Bản nháp"** | Code đã hiện thực nhưng spec vẫn ghi "Pre-implementation" → nên cập nhật "Đã hiện thực". | 🟡 Tài liệu |
+| 3 | **Không có `05_dashboard_tests.md`** | Assignment tham chiếu file này nhưng không tồn tại — E viết test không có test plan chính thức. | 🟢 Ghi chú |
+| 4 | **PR #5 → develop (ĐÚNG)** | `feature-cuong` → PR #5 → **develop** (rồi develop → main). E là **duy nhất** merge đúng develop. | ✅ Tốt |
 
 ---
 
@@ -77,17 +76,16 @@
 
 | # | Việc cần làm | Mức độ | Ghi chú |
 | :-: | :--- | :---: | :--- |
-| 1 | **Chờ F sửa `predict.py`** (n_tokens + split_id) để Error Analysis chạy được | 🔴 Chặn | Phụ thuộc F |
-| 2 | **Chạy Error Analysis sau khi có data thật**: `prepare` → gán nhãn 40 review → Leader cross-check → `summarize` | 🟠 Cao | Cần Leader training + C validate trước |
-| 3 | **Cập nhật spec `05_dashboard.md`** sang "Đã hiện thực" + bổ sung `05_dashboard_tests.md` | 🟡 Nên làm | |
-| 4 | **Cập nhật AI log** sau khi chạy error analysis thật (hiện Phase 6 đúng, chỉ thiếu bước execution) | 🟡 Nên làm | |
-| 5 | **PR/merge dashboard** khi có CSV thật + ảnh demo | 🟢 Thấp | |
+| 1 | **Chạy Error Analysis khi có data thật**: `prepare` → gán nhãn 40 review → Leader cross-check → `summarize` | 🟠 Cao | Cần Leader training + C validate trước |
+| 2 | **Cập nhật spec `05_dashboard.md`** sang "Đã hiện thực" + bổ sung `05_dashboard_tests.md` | 🟡 Nên làm | |
+| 3 | **Cập nhật AI log** sau khi chạy error analysis thật (hiện Phase 6 đúng, chỉ thiếu bước execution) | 🟡 Nên làm | |
+| 4 | **PR/merge dashboard** khi có CSV thật + ảnh demo | 🟢 Thấp | |
 
 ---
 
 ## 7. Kết luận
 
 - **Dashboard: XUẤT SẮC** — hoàn thành đủ FR-1→FR-10, 24 test, không torch, robust, UI đầy đủ. Dùng được ngay với CSV thật sau khi Leader training.
-- **Error Analysis code: HOÀN THÀNH** (15 test) — nhưng **execution 0%**: bị chặn bởi gap `n_tokens`/`split_id` của F + cần data thật + gán nhãn người + Leader cross-check.
+- **Error Analysis code: HOÀN THÀNH** (15 test) — **execution 0%**: chờ data thật + gán nhãn người + Leader cross-check. **Schema blocker (`n_tokens`/`split_id`) ĐÃ ĐƯỢC F SỬA**.
 - **Điểm sáng:** E là thành viên **duy nhất** đúng quy trình PR (→ develop) và có **AI log chính xác** (39 pass khớp thực tế).
-- **Ưu tiên:** (1) F sửa `predict.py` → (2) E chạy error analysis sau khi có data + annotate → (3) cập nhật spec 05 + AI log.
+- **Ưu tiên:** (1) Chờ data thật + Leader training + C validate → (2) E chạy error analysis → (3) cập nhật spec 05 + AI log.

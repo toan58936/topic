@@ -1,6 +1,6 @@
 # Báo Cáo Trạng Thái Công Việc — Thành Viên D (Train Infra Core)
 **Người thực hiện:** Thành viên D — Train Infra Core (`utils.py`, `engine.py`)
-**Ngày đánh giá:** 2026-11-15
+**Ngày đánh giá:** 2026-11-18 (cập nhật từ 2026-11-15)
 **Nhánh:** `feature/model-training-infra` → `main` (PR #4)
 
 ---
@@ -13,7 +13,7 @@
 | `src/engine.py` | ✅ Hoàn thành | 100% |
 | Test (`test_utils.py`, `test_engine.py`) | ✅ Hoàn thành | 100% |
 
-**Kết luận nhanh:** Đây là module **hoàn chỉnh và chất lượng cao nhất** trong các thành viên đã đánh giá — code khớp spec đến từng FR, test phủ đủ kế hoạch, không có gap code/test. Chỉ còn vài điểm hành chính cần dọn (AI log stale, quy trình PR).
+**Kết luận nhanh:** Đây là module **hoàn chỉnh và chất lượng cao nhất** — code khớp spec đến từng FR, test phủ đủ kế hoạch, không có gap code/test. **`engine.py` đã có sẵn ghi `split_id` vào `run_meta.json`** (helper `_resolve_split_id` + `_run_meta_payload`) — không cần sửa thêm cho schema gap.
 
 ---
 
@@ -29,7 +29,7 @@
 
 ---
 
-## 3. `src/engine.py` — Chi tiết (499 dòng)
+## 3. `src/engine.py` — Chi tiết (517 dòng)
 
 | Hàm | Nhiệm vụ | Trạng thái | Dẫn chứng |
 | :--- | :--- | :---: | :--- |
@@ -37,13 +37,17 @@
 | `build_optimizer_and_scheduler` | AdamW (no-decay cho ndim≤1) + warmup tuyến tính | ✅ | `engine.py:47-67` (FR-6) |
 | `train_one_epoch` | fp16 autocast, GradScaler, grad clip, `out.float()` trước loss, `FloatingPointError` | ✅ | `engine.py:84-157` (FR-7) |
 | `evaluate` | eval, no_grad, trả review_id/y_true/y_pred_raw/loss, khôi phục mode | ✅ | `engine.py:160-198` (FR-8) |
-| `fit` | checkpoint/resume/history/run_meta/guards, `generator.manual_seed(seed+epoch)` | ✅ | `engine.py:244-470` (FR-9→FR-13) |
-| `compare_runs` | Bảng so sánh + `rel_diff_pct_vs_first` | ✅ | `engine.py:473-499` (FR-14) |
+| `fit` | checkpoint/resume/history/run_meta/guards, `generator.manual_seed(seed+epoch)` | ✅ | `engine.py:262-488` (FR-9→FR-13) |
+| `compare_runs` | Bảng so sánh + `rel_diff_pct_vs_first` | ✅ | `engine.py:491-517` (FR-14) |
 
 **Điểm chất lượng nổi bật:**
 - `train_one_epoch`: chỉ gọi `scheduler.step()` khi batch không bị GradScaler bỏ (tránh lệch lịch) — `engine.py:140-141`.
 - `evaluate`: `fp16=None` → auto (chỉ CUDA, **không cảnh báo** trên CPU) — đúng spec §2.5.
 - `fit`: `last.pt` xóa khi hoàn tất (trừ `keep_last`), `run_meta.status="completed"`, resume khớp config trừ `RESUME_IGNORE_KEYS` — `engine.py:25-28, 270-311, 454-457`.
+- **`_resolve_split_id()`** (line 216-230): đọc `split_id` từ `run_config` hoặc `split_stats.json` trong `data_dir`
+- **`_run_meta_payload()`** (line 243): ghi `split_id` vào `run_meta.json` mỗi epoch
+
+→ **Đã đáp ứng yêu cầu Design §9.9.1 + 06_integration_test.md cho `split_id` trong run_meta.**
 
 ---
 
@@ -83,6 +87,7 @@
 
 ## 7. Kết luận
 
-- **Code + test: XUẤT SẮC.** `utils.py` (5 hàm) và `engine.py` (7 hàm, 499 dòng) khớp spec §2.4/§2.5 đến từng FR; test phủ đủ U1–U4, L1–L7, F1–F6.
+- **Code + test: XUẤT SẮC.** `utils.py` (5 hàm) và `engine.py` (7 hàm, 517 dòng) khớp spec §2.4/§2.5 đến từng FR; test phủ đủ U1–U4, L1–L7, F1–F6.
 - **Không có gap code/test** như C (integration) hay B (test rút gọn). Đây là module tham chiếu chất lượng cho cả nhóm.
+- **`split_id` trong `run_meta.json`: ĐÃ CÓ SẴN** (helper `_resolve_split_id` + `_run_meta_payload`) — hỗ trợ F `collect_summary_inputs` đọc được `split_id`.
 - **Việc còn lại chỉ là hành chính:** cập nhật AI log, sửa mô tả `rng_state` trong assignment, xác minh lại pytest khi có torch, và tuân thủ quy trình PR đúng (→ develop).
