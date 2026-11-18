@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-from transformers import AutoConfig
+from transformers import AutoConfig, AutoTokenizer
 
 from src import metrics
 from src.engine import evaluate
@@ -19,10 +19,32 @@ from src.model_builder import BACKBONES, build_model
 from src.utils import get_device, load_checkpoint, write_atomic
 
 
+def _resolve_split_id(run_config: dict, data_dir: str | None = None) -> str | None:
+    """Đọc split_id từ run_config hoặc split_stats.json trong data_dir."""
+    if run_config and run_config.get("split_id"):
+        return str(run_config["split_id"])
+    if data_dir:
+        stats_path = Path(data_dir) / "split_stats.json"
+        if stats_path.exists():
+            try:
+                stats = json.loads(stats_path.read_text(encoding="utf-8"))
+                return stats.get("split_id")
+            except Exception:
+                return None
+    return None
+
+
 def _resolve_device(device):
     if device is None:
         return get_device("auto")
     return torch.device(device) if not isinstance(device, torch.device) else device
+
+
+def _count_tokens_bert(texts: list[str]) -> list[int]:
+    """Đếm số token BERT không cắt (truncation=False) cho danh sách văn bản."""
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    enc = tokenizer(texts, padding=False, truncation=False, add_special_tokens=True)
+    return [len(ids) for ids in enc["input_ids"]]
 
 
 def _autocast_ctx(use_fp16: bool):
@@ -143,7 +165,7 @@ def load_trained_model(checkpoint_path, device=None, *, backbone_config=None):
 
 def export_test_predictions(
     model, test_loader, model_name, out_dir, *, device=None, fp16=None,
-    overwrite=False, run_info=None,
+    overwrite=False, run_info=None, run_config=None, data_dir=None,
 ) -> dict:
     """Chạy mô hình trên test_loader đúng một lần, ghi <model>_test.csv + meta json."""
     out_dir = Path(out_dir)
@@ -160,11 +182,14 @@ def export_test_predictions(
         torch.cuda.synchronize()
     inference_seconds = time.time() - t0
 
+    split_id = _resolve_split_id(run_config, data_dir)
+
     df = pd.DataFrame({
         "review_id": result["review_id"],
         "true_stars": result["y_true"].astype(int),
         "pred_raw": result["y_pred_raw"],
         "pred": np.clip(result["y_pred_raw"], 1.0, 5.0),
+        "split_id": split_id,
     })
     write_atomic(str(csv_path), lambda p: df.to_csv(p, index=False))
 
@@ -177,6 +202,7 @@ def export_test_predictions(
         "inference_seconds": inference_seconds,
         "fp16": _resolve_fp16(fp16, device) if fp16 is not None else device.type == "cuda",
         "device": str(device),
+        "split_id": split_id,
     }
     write_atomic(
         str(meta_path),
@@ -187,7 +213,7 @@ def export_test_predictions(
 
 def _read_pred_csv(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
-    for col in ("review_id", "true_stars", "pred_raw", "pred"):
+    for col in ("review_id", "true_stars", "pred_raw", "pred", "split_id"):
         if col not in df.columns:
             raise ValueError(f"{path} thiếu cột {col!r}")
     return df
@@ -212,11 +238,16 @@ def merge_test_predictions(
 
     ref_ids = frames[0]["review_id"].tolist()
     ref_true = frames[0]["true_stars"].tolist()
+    ref_split_id = frames[0]["split_id"].iloc[0] if "split_id" in frames[0].columns else None
     for name, df in zip(model_names, frames):
         if df["review_id"].tolist() != ref_ids:
             raise ValueError(f"{name}_test.csv có review_id khác thứ tự/nội dung")
         if not np.array_equal(df["true_stars"].to_numpy(), np.asarray(ref_true)):
             raise ValueError(f"{name}_test.csv có true_stars không khớp")
+        if "split_id" in df.columns:
+            split_id_val = df["split_id"].iloc[0]
+            if split_id_val != ref_split_id:
+                raise ValueError(f"{name}_test.csv có split_id không khớp: {split_id_val} != {ref_split_id}")
 
     out = pd.DataFrame({"review_id": ref_ids, "true_stars": np.asarray(ref_true, dtype=np.int64)})
 
@@ -256,17 +287,23 @@ def merge_test_predictions(
     cols += [f"abs_err_{n}" for n in model_names]
     out = out[cols]
 
-    out_csv = out_dir / "test_predictions.csv"
-    out_text_csv = out_dir / "test_predictions_with_text.csv"
-    for p in (out_csv, out_text_csv):
-        if p.exists() and not overwrite:
-            raise FileExistsError(f"Đã tồn tại {p}; dùng overwrite=True để ghi đè")
-
+    # Thêm n_tokens (tokenizer BERT, không cắt) và split_id
     test_df = pd.read_parquet(test_parquet, columns=["review_id", "text"])
     text_map = dict(zip(test_df["review_id"], test_df["text"]))
     missing = [r for r in out["review_id"] if r not in text_map]
     if missing:
         raise ValueError(f"test_parquet thiếu review_id: {missing[:5]}")
+
+    texts_in_order = [text_map[r] for r in out["review_id"]]
+    n_tokens = _count_tokens_bert(texts_in_order)
+    out.insert(2, "n_tokens", n_tokens)
+    out.insert(3, "split_id", ref_split_id)
+
+    out_csv = out_dir / "test_predictions.csv"
+    out_text_csv = out_dir / "test_predictions_with_text.csv"
+    for p in (out_csv, out_text_csv):
+        if p.exists() and not overwrite:
+            raise FileExistsError(f"Đã tồn tại {p}; dùng overwrite=True để ghi đè")
 
     with_text = out.copy()
     with_text.insert(1, "text", out["review_id"].map(text_map))
