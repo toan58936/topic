@@ -2,7 +2,7 @@
 
 > **Tài liệu:** `docs/06_integration_test_tests.md`
 > **Đặc tả được kiểm thử:** `docs/06_integration_test.md` (script `scripts/validate_outputs.py` và pytest `tests/test_integration.py`)
-> **Trạng thái:** Bản nháp trước khi hiện thực
+> **Trạng thái:** Đã chốt — Đã hiện thực (`tests/test_integration_validation.py` + fixtures trong `tests/conftest.py`)
 
 ---
 

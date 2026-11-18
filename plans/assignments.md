@@ -87,7 +87,7 @@
 | **Modules** | `src/utils.py`, `src/engine.py` |
 | **Specs** | `docs/04_engine_and_utils.md`, `docs/04_engine_and_utils_tests.md` |
 | **Tests** | `tests/test_utils.py`, `tests/test_engine.py` |
-| **Deliverables (Code)** | - `set_seed()`, checkpoint save/load (weights_only=True)<br>- `train_epoch()`, `eval_epoch()`: Huber/MSE, fp16, grad clip<br>- Checkpoint/epoch: model, optimizer, scheduler, rng_state, history.csv<br>- Code pass pytest CPU<br>- PR merged → `develop` |
+| **Deliverables (Code)** | - `set_seed()`, checkpoint save/load (weights_only=True)<br>- `train_epoch()`, `eval_epoch()`: Huber/MSE, fp16, grad clip<br>- Checkpoint/epoch: model, optimizer, scheduler, history.csv<br>- Code pass pytest CPU<br>- PR merged → `develop` |
 | **Verification** | - Resume từ checkpoint works<br>- fp16 autocast, output .float() trước loss |
 | **GitHub** | `feature/training-infra-core` → PR → `develop` |
 | **AI Log** | Phase 2 (infra code) |

@@ -4,7 +4,7 @@
 > **Module liên quan:** `tests/test_integration.py` (pytest), `scripts/validate_outputs.py` (CLI)
 > **Kế hoạch kiểm thử:** `docs/06_integration_test_tests.md` (tách riêng — meta-test cho script validation)
 > **Phụ thuộc:** Tất cả spec 01–05; `docs/design.md` §4, §9.9; `docs/01_data.md` (split_id), `docs/02_evaluation.md` (model_summary.csv), `docs/04_engine_and_utils.md` (predict/merge schemas)
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Trạng thái:** Đã chốt — Đã hiện thực (`scripts/validate_outputs.py`, `tests/test_integration.py`, `tests/test_integration_validation.py` meta-test 11/11 corruption scenarios)
 
 ---
 

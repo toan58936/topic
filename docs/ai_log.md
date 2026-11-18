@@ -52,7 +52,7 @@
 
 ### Smoke Test
 - `pytest tests/ -m "not slow"`: **PASS 60/60** (10.2s, CPU, mô hình tiny random config)
-- Gồm: 15 test data_setup + 14 model_builder + 4 utils + 13 engine + 5 train + 9 predict
+- Gồm: 15 test data_setup (A) + 14 model_builder (C) + 4 utils (D) + 14 engine (D) + 5 train (F) + 8 predict (F)
 - S1/S2 (`slow`/`gpu`): skip — chờ Colab/GPU thật.
 
 ### Run Model

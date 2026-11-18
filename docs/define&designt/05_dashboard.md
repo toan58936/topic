@@ -4,7 +4,7 @@
 > **Module liên quan:** `app/streamlit_dashboard.py`
 > **Kế hoạch kiểm thử:** `docs/05_dashboard_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md`, `docs/design.md`; `docs/02_evaluation.md` (`metrics.py` để tính lại chỉ số theo bộ lọc); `docs/04_engine_and_utils.md` (schema `test_predictions.csv` và `model_summary.csv`)
-> **Trạng thái:** Bản nháp trước khi hiện thực (Pre-implementation Design Specification)
+> **Trạng thái:** Đã chốt — Đã hiện thực (`app/streamlit_dashboard.py` + `tests/test_dashboard.py`, 24 test pass, CPU no torch)
 
 ---
 
