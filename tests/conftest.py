@@ -237,3 +237,24 @@ def base_cfg(tmp_path, **overrides):
     )
     cfg.update(overrides)
     return cfg
+
+
+# ---------- Integration test fixtures (06) ----------
+
+@pytest.fixture(scope="session")
+def integration_results_dir():
+    """Thư mục kết quả cho integration test (local reports/)."""
+    return Path("reports")
+
+
+@pytest.fixture(scope="session")
+def integration_split_stats_path(integration_results_dir):
+    """Đường dẫn split_stats.json cho integration test."""
+    return integration_results_dir.parent / "data" / "split_stats.json"
+
+
+@pytest.fixture(scope="session")
+def integration_validation_data(integration_results_dir, integration_split_stats_path):
+    """Load all validation data cho integration test."""
+    from scripts.validate_outputs import load_all_data
+    return load_all_data(integration_results_dir, integration_split_stats_path)
