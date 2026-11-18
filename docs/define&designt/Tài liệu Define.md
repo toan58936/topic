@@ -1,6 +1,6 @@
 # Tài liệu Define – Đề tài 7: Text Regression (Yelp)
 
-Nov 8, 2026 · @Toan · Bản chốt
+Nov 8, 2026 · @Toan · Bản chốt (Cập nhật hạ tầng Kaggle)
 
 Tài liệu này chốt dự án làm gì, cho ai, với dữ liệu và tiêu chí nào. Đây là bản chốt: mọi mục là quyết định đã áp dụng, không còn mục chờ duyệt. Cách xây dựng (kiến trúc, module, thư mục, luồng dữ liệu, kiểm thử) nằm ở tài liệu Design riêng. Sau bản chốt chỉ sửa khi một lần chạy thật lộ ra vấn đề, và lý do phải ghi vào `docs/ai_log.md`.
 
@@ -104,7 +104,7 @@ Ba checkpoint khác nhau về tiền huấn luyện và tokenizer, nên kết lu
 - Mã nguồn dạng module (`src/`) trên GitHub riêng tư, kèm README (có tên người phụ trách từng mảng và phiên bản dữ liệu) và hướng dẫn cài đặt/chạy (`requirements.txt`).
 - Dữ liệu đã chia cố định và `split_stats.json` trên Drive.
 - Trọng số mô hình (`.pt`/`.pth`) lưu trên Drive.
-- Notebook chạy trên Colab.
+- Notebook chạy trên Kaggle / Colab.
 - Dashboard trực quan trình bày kết quả: bảng so sánh các mô hình, biểu đồ (điểm dự đoán so với điểm thật, phân phối sai số, sai số theo từng mức sao) và các ca đoán sai điển hình, đọc từ `test_predictions.csv` và `model_summary.csv`. Công cụ dựng dashboard nằm ở tài liệu Design.
 - Báo cáo (có mục Giới hạn), kèm nhật ký dùng AI.
 
@@ -115,7 +115,7 @@ Ba checkpoint khác nhau về tiền huấn luyện và tokenizer, nên kết lu
 | Thời gian và nhân sự | 2-3 tuần, 6 thành viên (1 Leader, 5 thành viên phụ trách 5 mảng, xem mục 13) |
 | Quản lý mã nguồn | VS Code và GitHub (repo riêng tư), mã dạng module (`src/`), nhánh riêng và Pull Request |
 | Lưu trữ | Google Drive chung cho dữ liệu đã chia và trọng số (`.pt`/`.pth`) |
-| Tính toán | Google Colab GPU; phiên có thể bị ngắt nên bật `fp16` và lưu checkpoint mỗi epoch |
+| Tính toán | Kaggle GPU (T4/P100 — 30h/tuần) / Google Colab; phiên có thể bị ngắt nên bật `fp16` và lưu checkpoint mỗi epoch |
 | Tái lập | Cố định `seed = 42`; mỗi lần chạy ghi phiên bản `torch` và `transformers`, loại GPU, commit hash và `split_id`. Do `fp16` và GPU không tất định, kết quả tái lập gần đúng chứ không giống hệt từng chữ số |
 | Thư viện | Python; PyTorch, Hugging Face Transformers, scikit-learn, pandas, Streamlit; phiên bản cố định trong `requirements.txt` |
 
@@ -147,7 +147,7 @@ Tất cả mô hình được đo trên cùng một tập test cố định (`se
 
 | Vai trò | Mảng phụ trách |
 | --- | --- |
-| Leader | Kiến trúc, review code và Pull Request, **chạy huấn luyện Colab (Phase 3–5)**, đối chiếu giấy phép Yelp, tổng hợp báo cáo, điều phối |
+| Leader | Kiến trúc, review code và Pull Request, **chạy huấn luyện Kaggle/Colab (Phase 3–5)**, đối chiếu giấy phép Yelp, tổng hợp báo cáo, điều phối |
 | Thành viên A | Dữ liệu: `data_setup.py`, `split_stats.json`, đặc tả `01` |
 | Thành viên B | Đánh giá và baseline: `metrics.py`, `baseline.py`, đặc tả `02` |
 | Thành viên C | Mô hình: `model_builder.py` + Integration Test: test toàn bộ luồng end-to-end, validate pipeline outputs, đặc tả `03`, `06` |
@@ -164,7 +164,7 @@ Xem chi tiết phase gate và timeline trong `plans/implementation.md` (Phase 0�
 
 | Rủi ro | Cách xử lý |
 | --- | --- |
-| Mất GPU hoặc ngắt phiên Colab | Bật `fp16`, lưu checkpoint lên Drive mỗi epoch, resume `auto` |
+| Mất kết nối Kaggle/Colab | Bật `fp16`, lưu checkpoint lên Drive mỗi epoch, resume `auto` |
 | Hết hạn mức GPU | Thứ tự BERT → DistilBERT → RoBERTa; thiếu quota thì bỏ trọn RoBERTa |
 | Dữ liệu lớn / tải chậm | Tải một lần, đọc theo khối, stratified sample 60k một lần |
 | Overfit | Theo dõi loss Val; early stopping implicit qua checkpoint selection |

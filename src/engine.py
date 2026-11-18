@@ -213,6 +213,23 @@ def _atomic_csv(path: Path, rows: list, fieldnames: list) -> None:
     write_atomic(str(path), _write)
 
 
+def _resolve_split_id(run_config: dict):
+    """Đọc split_id từ split_stats.json trong data_dir nếu tồn tại."""
+    if "split_id" in run_config and run_config["split_id"]:
+        return str(run_config["split_id"])
+    data_dir = run_config.get("data_dir")
+    if not data_dir:
+        return None
+    stats_path = Path(data_dir) / "split_stats.json"
+    if stats_path.exists():
+        try:
+            stats = json.loads(stats_path.read_text(encoding="utf-8"))
+            return stats.get("split_id")
+        except Exception:
+            return None
+    return None
+
+
 def _run_meta_payload(run_config, status, epochs_done, best_epoch, best_val_rmse,
                       n_params, train_seconds, epoch_seconds_mean, device):
     import transformers
@@ -223,6 +240,7 @@ def _run_meta_payload(run_config, status, epochs_done, best_epoch, best_val_rmse
         "backbone": run_config.get("backbone"),
         "loss": run_config.get("loss"),
         "seed": run_config.get("seed"),
+        "split_id": _resolve_split_id(run_config),
         "status": status,
         "epochs_done": epochs_done,
         "best_epoch": best_epoch,

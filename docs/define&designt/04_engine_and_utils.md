@@ -4,8 +4,8 @@
 > **Module liên quan:** `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py`
 > **Kế hoạch kiểm thử:** `docs/04_engine_and_utils_tests.md` (tách riêng)
 > **Phụ thuộc:** `docs/define.md` (mục 9, 11, 12, 14), `docs/design.md`; `docs/01_data.md` (dạng batch, `create_dataloaders`, bộ sinh xáo trộn của `train_loader`); `docs/02_evaluation.md` (`rmse`, `mae`, `clip_scores`, đầu vào của `build_model_summary`); `docs/03_model.md` (`build_model`, `build_tokenizer`, `count_parameters`)
-> **Dùng bởi:** `notebooks/colab_runner.ipynb`; dashboard đọc kết quả do module này xuất (`docs/05_dashboard.md`, đề xuất, chưa viết)
-> **Trạng thái:** Đã hiện thực — `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py` + 4 file test (31/31 PASS, CPU synthetic, 2026-11-11). Smoke test GPU/Colab chưa chạy.
+> **Dùng bởi:** `notebooks/02-yelp-gpu-training.ipynb`; dashboard đọc kết quả do module này xuất (`docs/05_dashboard.md`, đề xuất, chưa viết)
+> **Trạng thái:** Đã hiện thực — `src/utils.py`, `src/engine.py`, `src/train.py`, `src/predict.py` + 4 file test (31/31 PASS, CPU synthetic, 2026-11-11). Smoke test GPU chưa chạy.
 
 ---
 
@@ -25,20 +25,20 @@ Bốn module này là **phần chạy**: đưa mô hình ở `docs/03_model.md` 
 Mục tiêu:
 
 * Huấn luyện ba backbone **cùng thiết lập, cùng ngân sách**, chỉ khác backbone (theo `docs/define.md` mục 9).
-* Sống sót qua việc Colab ngắt phiên: lưu checkpoint mỗi epoch và tiếp tục được (theo `docs/define.md` mục 11).
+* Sống sót qua việc ngắt phiên: lưu checkpoint mỗi epoch và tiếp tục được (theo `docs/define.md` mục 11).
 * Cung cấp số liệu mà Define đòi ở cuối Tuần 1: thời gian thực tế của một epoch, và RMSE trên Val của Huber so với MSE trên BERT (theo `docs/define.md` mục 14).
 * Dùng tập Test **một lần**, ở cấu hình cuối, đúng quy tắc của `docs/02_evaluation.md`.
 * Mọi lần chạy ghi lại cấu hình, thời gian, số tham số để tái lập và để `model_summary.csv` có đủ đầu vào.
 
 **Bảy bài toán cốt lõi cần giải quyết:**
 
-1. **Phiên Colab bị ngắt.** Huấn luyện có thể mất hàng chục phút đến vài giờ. Phải lưu trạng thái đầy đủ (mô hình, bộ tối ưu, lịch tốc độ học, lịch sử) sau mỗi epoch và tiếp tục đúng chỗ dừng, thay vì chạy lại từ đầu.
+1. **Phiên Kaggle/Colab bị ngắt.** Huấn luyện có thể mất hàng chục phút đến vài giờ. Phải lưu trạng thái đầy đủ (mô hình, bộ tối ưu, lịch tốc độ học, lịch sử) sau mỗi epoch và tiếp tục đúng chỗ dừng, thay vì chạy lại từ đầu.
 2. **So sánh công bằng và tái lập.** Cả ba backbone cần cùng siêu tham số huấn luyện, cùng số epoch, cùng thứ tự dữ liệu theo từng epoch. Thứ tự xáo trộn phải phụ thuộc vào (seed, số epoch), không phụ thuộc việc có bị ngắt giữa chừng hay không.
 3. **Test chỉ dùng một lần.** Nếu hàm huấn luyện có thể chạm Test thì việc chọn loss, chọn checkpoint, chọn số epoch dễ bị Test chi phối. Vì vậy `fit` không nhận tập Test, và chỉ `predict.py` đọc Test, ở bước xuất kết quả cuối.
 4. **Quyết định loss trước Tuần 2.** Define yêu cầu chạy MSE đối chứng trên BERT và đổi mặc định nếu RMSE Val của MSE thấp hơn đáng kể. Cần lịch sử huấn luyện lưu ra file và một hàm so sánh các lần chạy.
 5. **`fp16` an toàn.** Điểm đầu ra có thể là `float16`; loss phải tính trên `float32`; gradient phải được co giãn (`GradScaler`); loss không hữu hạn phải dừng ngay chứ không âm thầm huấn luyện tiếp.
-6. **Kết quả đến từ nhiều phiên Colab.** Dự đoán Test của từng mô hình sinh ra ở các phiên khác nhau; phải lưu riêng từng mô hình rồi ghép, kèm kiểm tra các file khớp `review_id` và nhãn.
-7. **Dung lượng Drive và thời gian ghi.** Checkpoint đầy đủ (mô hình cộng trạng thái AdamW) lớn gấp khoảng ba lần trọng số riêng; cần quy tắc dọn dẹp để không đầy Drive.
+6. **Kết quả đến từ nhiều phiên chạy.** Dự đoán Test của từng mô hình sinh ra ở các phiên khác nhau; phải lưu riêng từng mô hình rồi ghép, kèm kiểm tra các file khớp `split_id`, `review_id` và nhãn.
+7. **Dung lượng lưu trữ và thời gian ghi.** Checkpoint đầy đủ (mô hình cộng trạng thái AdamW) lớn gấp khoảng ba lần trọng số riêng; cần quy tắc dọn dẹp để không đầy bộ nhớ Kaggle Working / Drive.
 
 ### 1.2. Đầu vào / Đầu ra
 
@@ -57,7 +57,7 @@ Mục tiêu:
 | :--- | :--- |
 | FR-1 | `set_seed` đặt seed cho `random`, `numpy`, `torch` (CPU và CUDA); tuỳ chọn `deterministic` bật chế độ xác định của cuDNN. |
 | FR-2 | `get_device("auto")` chọn CUDA nếu có, không thì CPU; yêu cầu `cuda` khi không có CUDA thì báo lỗi. |
-| FR-3 | `write_atomic` ghi vào file tạm cùng thư mục rồi đổi tên; lỗi giữa chừng không làm hỏng file cũ và không để lại file tạm. Mọi file kết quả và checkpoint dùng hàm này. |
+| FR-3 | `write_atomic` ghi vào file tạm cùng thư mục rồi đổi tên (`os.replace`); lỗi giữa chừng không làm hỏng file cũ và không để lại file tạm. Mọi file kết quả và checkpoint dùng hàm này. |
 | FR-4 | `save_checkpoint` chỉ chấp nhận `dict` gồm tensor và kiểu dữ liệu cơ bản; `load_checkpoint` nạp bằng `weights_only=True`. |
 | FR-5 | `build_loss("huber", delta)` và `build_loss("mse")`; loss luôn tính trên `float32`. |
 | FR-6 | `build_optimizer_and_scheduler`: AdamW; tham số một chiều (bias, LayerNorm) không áp weight decay; lịch tăng tuyến tính (warmup) rồi giảm tuyến tính về 0, cập nhật theo bước. |
@@ -66,7 +66,7 @@ Mục tiêu:
 | FR-9 | `fit` chạy đúng `epochs` epoch (không dừng sớm); mỗi epoch: huấn luyện, kiểm định trên Val, tính chỉ số bằng `metrics.py`, ghi `history.csv`, lưu `last.pt`, và lưu `best_model.pt` khi RMSE Val (đã clip) tốt hơn mọi epoch trước. |
 | FR-10 | Trước mỗi epoch, `fit` đặt lại bộ sinh xáo trộn của `train_loader` bằng `seed + epoch`. |
 | FR-11 | `fit` tiếp tục từ `last.pt` khi cấu hình khớp, và từ chối khi cấu hình khác, khi lần chạy đã hoàn tất hoặc khi đã có kết quả mà không được phép ghi đè (bảng ở mục 2.5). |
-| FR-12 | `fit` ghi `run_meta.json` gồm số tham số, thời gian từng epoch, tổng thời gian huấn luyện (cộng dồn qua các lần tiếp tục), epoch tốt nhất, trạng thái. |
+| FR-12 | `fit` ghi `run_meta.json` gồm số tham số, thời gian từng epoch, tổng thời gian huấn luyện (cộng dồn qua các lần tiếp tục), epoch tốt nhất, trạng thái và `split_id`. |
 | FR-13 | `fit` không nhận `test_loader`: không lặp qua tập Test và không dùng nó để chọn mô hình, loss hay số epoch. (`run_training` vẫn gọi `create_dataloaders` nên đọc `test.parquet` để dựng loader, nhưng không lặp qua.) |
 | FR-14 | `compare_runs` đọc `history.csv` của nhiều lần chạy và trả về bảng so sánh RMSE Val tốt nhất. |
 | FR-15 | `load_config` áp mặc định, ép kiểu số (kể cả khi YAML đọc `2e-5` thành chuỗi), từ chối khoá lạ và giá trị không hợp lệ. |
@@ -75,9 +75,9 @@ Mục tiêu:
 | FR-18 | `train.py` chạy được bằng dòng lệnh: `python -m src.train --config <file>`, có `--set khoá=giá_trị` để ghi đè và `--overwrite`, `--no-resume`. |
 | FR-19 | `predict` nhận một chuỗi (trả về `float`) hoặc danh sách chuỗi (trả về mảng `numpy`), điểm đã clip về 1.0-5.0 theo mặc định; không để mô hình ở chế độ khác với lúc nhận. |
 | FR-20 | `load_trained_model` dựng lại mô hình từ `best_model.pt` và trả về mô hình ở chế độ `eval` kèm thông tin lần chạy. |
-| FR-21 | `export_test_predictions` chạy mô hình trên `test_loader` đúng một lần, ghi điểm thô và điểm đã clip, `rmse_raw`, thời gian suy luận; không ghi đè trừ khi `overwrite=True`. |
-| FR-22 | `merge_test_predictions` ghép dự đoán của các mô hình (và baseline nếu có) thành `test_predictions.csv` và `test_predictions_with_text.csv`, kiểm tra các file khớp `review_id` và nhãn. |
-| FR-23 | `collect_summary_inputs` gom `param_counts`, `train_seconds`, `inference_seconds`, `rmse_raw_by_model` để truyền vào `build_model_summary`. |
+| FR-21 | `export_test_predictions` chạy mô hình trên `test_loader` đúng một lần, ghi điểm thô và điểm đã clip, `split_id`, `rmse_raw`, thời gian suy luận; không ghi đè trừ khi `overwrite=True`. |
+| FR-22 | `merge_test_predictions` ghép dự đoán của các mô hình (và baseline nếu có) thành `test_predictions.csv` và `test_predictions_with_text.csv`, kiểm tra các file khớp `split_id`, `review_id` và nhãn, bổ sung cột `n_tokens`. |
+| FR-23 | `collect_summary_inputs` gom `param_counts`, `train_seconds`, `inference_seconds`, `rmse_raw_by_model` và `split_id` để truyền vào `build_model_summary`. |
 | FR-24 | Kiểm tra đầu vào hợp lệ và báo lỗi rõ ràng. |
 
 ### 1.4. Ràng buộc
@@ -100,8 +100,8 @@ Mục tiêu:
 4. Toàn bộ quy trình huấn luyện chạy được khi `test_loader` bị cài để lỗi nếu có ai lặp qua nó; chỉ `export_test_predictions` lặp qua `test_loader` (`merge_test_predictions` chỉ đọc cột `text` từ `test.parquet`).
 5. Loss không hữu hạn dừng huấn luyện bằng `FloatingPointError`; `fp16` trên CPU tự tắt kèm cảnh báo.
 6. `predict` trả về số thực trong 1.0-5.0, không đổi theo `batch_size`, và không để mô hình ở chế độ `eval` nếu lúc nhận nó đang ở `train`.
-7. `export_test_predictions` và `merge_test_predictions` ghi đúng cột, không ghi đè âm thầm, và từ chối khi các file không khớp `review_id` hoặc nhãn.
-8. `run_meta.json` đủ số liệu cho `docs/02_evaluation.md` (`train_seconds`, số tham số) và cho quyết định quy mô mẫu (thời gian mỗi epoch).
+7. `export_test_predictions` và `merge_test_predictions` ghi đúng cột, schema chuẩn, không ghi đè âm thầm, và từ chối khi các file không khớp `split_id`, `review_id` hoặc nhãn.
+8. `run_meta.json` đủ số liệu cho `docs/02_evaluation.md` (`train_seconds`, số tham số, `split_id`) và cho quyết định quy mô mẫu (thời gian mỗi epoch).
 9. Bộ test trong `docs/04_engine_and_utils_tests.md` đều đạt.
 
 ---
@@ -120,7 +120,7 @@ train.py: load_config → run_training
       ▼
 engine.py: fit ── train_one_epoch ──► evaluate (val) ──► metrics.rmse / mae (02)
       │                                   │
-      ├──► checkpoints/<run_name>/{last.pt, best_model.pt}   (Drive, qua utils.write_atomic)
+      ├──► checkpoints/<run_name>/{last.pt, best_model.pt}   (Kaggle Output qua utils.write_atomic)
       └──► results/runs/<run_name>/{config.yaml, history.csv, run_meta.json}
 
                   (chỉ khi cấu hình đã chốt, mỗi mô hình một lần)
@@ -136,8 +136,8 @@ predict.py: load_trained_model → export_test_predictions (đọc test_loader)
 
 **Tuần 1 (kịp Mốc 1, theo `docs/define.md` mục 14):**
 
-1. Tạo thư mục dữ liệu nhỏ `data_smoke/` (khoảng 8 review lấy từ ba file `parquet`) và chạy `train.py --config configs/smoke.yaml`: bước Smoke test của `docs/design.md` mục 8 (không lỗi, loss hợp lệ, mỗi review ra một số thực). **`data_smoke/` chứa text Yelp thật nên phải nằm trong `.gitignore`** (Design mục 7 cấm đưa cột `text` lên repo); hoặc sinh dữ liệu tổng hợp thay vì lấy review thật.
-2. **Đo tốc độ trước khi chạy đầy đủ:** chạy `configs/bert.yaml` vài trăm bước (dòng log mỗi `log_every` bước ghi số bước/giây và thời gian epoch ước tính; có thể dừng bằng ngắt thủ công hoặc `epochs` nhỏ). Dựa vào đó quyết định giữ 60.000 hay tăng lên 100.000 review. Nếu đổi kích thước mẫu thì chạy lại `prepare_splits(overwrite=True)` và baseline **trước** các lần chạy đầy đủ, để không lần chạy cuối nào phải lặp lại.
+1. Tạo thư mục dữ liệu nhỏ `data_smoke/` (khoảng 8 review lấy từ ba file `parquet`) và chạy `train.py --config configs/smoke.yaml`: bước Smoke test của `docs/design.md` mục 8 (không lỗi, loss hợp lệ, mỗi review ra một số thực).
+2. **Đo tốc độ trước khi chạy đầy đủ:** chạy `configs/bert.yaml` vài trăm bước (dòng log mỗi `log_every` bước ghi số bước/giây và thời gian epoch ước tính; có thể dừng bằng ngắt thủ công hoặc `epochs` nhỏ) trên GPU Kaggle. Dựa vào đó quyết định giữ 60.000 hay tăng lên 100.000 review.
 3. Chạy hai lần huấn luyện **đầy đủ** trên BERT với cùng thiết lập: `configs/bert.yaml` (Huber, `run_name: bert`) và `configs/bert_mse.yaml` (MSE, `run_name: bert_mse`). Dùng đủ thiết lập để lần chạy thắng được dùng làm mô hình cuối, không phải huấn luyện lại.
 4. `compare_runs(["bert", "bert_mse"], results_dir)` để so RMSE Val tốt nhất theo ngưỡng "đáng kể" mà nhóm chốt **trước khi xem kết quả** (xem mục 2.11).
 5. `epoch_seconds_mean` trong `run_meta.json` của hai lần chạy đầy đủ dùng để xác nhận ngân sách thời gian Tuần 2, không còn dùng để đổi kích thước mẫu (đã quyết ở bước 2).
@@ -148,7 +148,7 @@ predict.py: load_trained_model → export_test_predictions (đọc test_loader)
 
 1. Với mỗi mô hình: `load_trained_model` → `create_dataloaders` → `export_test_predictions(..., model_name=backbone)`.
 2. `merge_test_predictions` (kèm dự đoán baseline nếu có) → `collect_summary_inputs` → `build_model_summary` → `write_model_summary` (`docs/02_evaluation.md`).
-3. Sao chép `test_predictions.csv` và `model_summary.csv` vào `reports/` (xem `docs/design.md` mục 9.2).
+3. Sao chép `test_predictions.csv` và `model_summary.csv` vào `reports/` trên GitHub (xem `docs/design.md` mục 9.2).
 
 ### 2.3. Cấu hình một lần chạy — `train.py`
 
@@ -175,11 +175,11 @@ Cấu hình là một file YAML trong `configs/`. Khoá và mặc định:
 | `num_workers` | `int` | `0` | Theo `docs/01_data.md` |
 | `device` | `str` | `auto` | `auto`, `cpu`, `cuda` |
 | `log_every` | `int` | `100` | Số bước giữa hai dòng log; `0` để tắt |
-| `data_dir` | `str` | bắt buộc | Thư mục chứa ba file `parquet` (bản sao cục bộ) |
-| `checkpoint_dir` | `str` | bắt buộc | Gốc lưu checkpoint (Drive) |
-| `results_dir` | `str` | bắt buộc | Gốc lưu kết quả (Drive) |
+| `data_dir` | `str` | bắt buộc | Thư mục chứa ba file `parquet` và `split_stats.json` |
+| `checkpoint_dir` | `str` | bắt buộc | Gốc lưu checkpoint |
+| `results_dir` | `str` | bắt buộc | Gốc lưu kết quả |
 
-Ví dụ `configs/bert.yaml`:
+Ví dụ `configs/bert.yaml` (dùng đường dẫn Kaggle chuẩn):
 
 ```yaml
 backbone: bert
@@ -197,14 +197,10 @@ weight_decay: 0.01
 warmup_ratio: 0.1
 grad_clip: 1.0
 fp16: true
-data_dir: /content/data
-checkpoint_dir: /content/drive/MyDrive/project/checkpoints
-results_dir: /content/drive/MyDrive/project/results
+data_dir: /kaggle/input/yelp-topic7-splits
+checkpoint_dir: /kaggle/working/checkpoints
+results_dir: /kaggle/working/results
 ```
-
-`configs/bert_mse.yaml` chỉ khác `run_name: bert_mse` và `loss: mse` (hoặc dùng `--set`). `configs/smoke.yaml` trỏ `data_dir` tới `data_smoke/`, đặt `epochs: 1`, `batch_size: 4`, `max_length: 64`, `backbone: distilbert` (nhỏ nhất) và `run_name: smoke`.
-
-Siêu tham số huấn luyện (`batch_size`, `epochs`, `lr`, `weight_decay`, `warmup_ratio`, `grad_clip`) là đề xuất của tài liệu này: Define không nêu giá trị. Cả ba backbone dùng cùng giá trị.
 
 ### 2.4. `utils.py`
 
@@ -217,7 +213,7 @@ load_checkpoint(path: str, map_location="cpu") -> dict
 ```
 
 * **`set_seed`:** đặt `random.seed`, `numpy.random.seed`, `torch.manual_seed`, `torch.cuda.manual_seed_all`. Với `deterministic=True`, đặt thêm `torch.backends.cudnn.deterministic = True` và `benchmark = False` (chậm hơn, mặc định tắt). Hàm không động tới bộ sinh riêng của `prepare_splits` (xem `docs/01_data.md` mục 2.8).
-* **`write_atomic(path, write_fn)`:** tạo thư mục cha nếu thiếu; gọi `write_fn(tmp_path)` với `tmp_path` cùng thư mục đích; thành công thì `os.replace(tmp_path, path)`; lỗi thì xoá file tạm và ném lại lỗi. Hàm này bao mọi lần ghi lên Drive (checkpoint, `history.csv`, `run_meta.json`, CSV dự đoán).
+* **`write_atomic(path, write_fn)`:** tạo thư mục cha nếu thiếu; gọi `write_fn(tmp_path)` với `tmp_path` cùng thư mục đích; thành công thì `os.replace(tmp_path, path)`; lỗi thì xoá file tạm và ném lại lỗi. Hàm này bao mọi lần ghi lên Drive/Kaggle (checkpoint, `history.csv`, `run_meta.json`, CSV dự đoán).
 * **`save_checkpoint(path, state)`:** kiểm tra `state` là `dict`, rồi `write_atomic(path, lambda p: torch.save(state, p))`.
 * **`load_checkpoint(path, map_location)`:** `torch.load(path, map_location=map_location, weights_only=True)`; `FileNotFoundError` nếu thiếu file.
 
@@ -228,7 +224,7 @@ load_checkpoint(path: str, map_location="cpu") -> dict
 | `last.pt` | `format_version`, `epoch` (số epoch đã xong), `model_state_dict`, `optimizer_state_dict`, `scheduler_state_dict`, `scaler_state_dict` (hoặc `None`), `history` (danh sách `dict`), `best_val_rmse`, `best_epoch`, `train_seconds`, `run_config` | Ghi đè sau mỗi epoch | Tiếp tục huấn luyện |
 | `best_model.pt` | `format_version`, `epoch`, `val_rmse`, `model_state_dict`, `run_config`, `backbone_config` (`model.backbone.config.to_dict()`, chỉ kiểu cơ bản) | Khi RMSE Val tốt hơn mọi epoch trước | Suy luận và xuất kết quả |
 
-**Dung lượng ước tính** (`float32`, từ số tham số ở `docs/03_model.md` mục 2.9): `best_model.pt` khoảng 0,44 GB (BERT), 0,50 GB (RoBERTa), 0,27 GB (DistilBERT); `last.pt` lớn gấp khoảng ba (mô hình cộng hai vector trạng thái của AdamW), khoảng 1,3 GB với BERT. Bốn lần chạy (`bert`, `roberta`, `distilbert`, `bert_mse`) giữ lại khoảng 1,6 GB `best_model.pt`. Vì vậy `last.pt` bị xoá khi lần chạy hoàn tất (trừ khi `keep_last=True`).
+**Dung lượng ước tính** (`float32`, từ số tham số ở `docs/03_model.md` mục 2.9): `best_model.pt` khoảng 0,44 GB (BERT), 0,50 GB (RoBERTa), 0,27 GB (DistilBERT); `last.pt` lớn gấp khoảng ba (mô hình cộng hai vector trạng thái của AdamW), khoảng 1,3 GB với BERT. Bốn lần chạy (`bert`, `roberta`, `distilbert`, `bert_mse`) giữ lại khoảng 1,6 GB `best_model.pt`. Vì vậy `last.pt` bị xoá khi lần chạy hoàn tất (trừ khi `keep_last=True`). Không lưu `rng_state` trong checkpoint, trạng thái ngẫu nhiên tái lập qua `generator.manual_seed(seed + epoch)`.
 
 ### 2.5. `engine.py`
 
@@ -320,7 +316,7 @@ theo đúng thứ tự `loader` (với `val_loader` và `test_loader` không xá
 | `epoch_seconds` | Giây của epoch (xem trên) |
 | `is_best` | `True` nếu epoch này tốt hơn mọi epoch trước |
 
-**Nội dung `run_meta.json`:** `run_name`, `backbone`, `loss`, `seed`, `status` (`running` hoặc `completed`), `epochs_done`, `best_epoch`, `best_val_rmse`, `n_params` (từ `count_parameters`), `train_seconds` (cộng dồn), `epoch_seconds_mean`, `device` (tên GPU hoặc `cpu`), `torch_version`, `transformers_version`.
+**Nội dung `run_meta.json`:** `run_name`, `backbone`, `loss`, `seed`, `status` (`running` hoặc `completed`), `epochs_done`, `best_epoch`, `best_val_rmse`, `n_params` (từ `count_parameters`), `train_seconds` (cộng dồn), `epoch_seconds_mean`, `device` (tên GPU hoặc `cpu`), `torch_version`, `transformers_version`, và **`split_id`** (đọc từ `split_stats.json` nếu có trong `data_dir`).
 
 **Quy tắc tiếp tục và ghi đè (trạng thái đã có → hành vi):**
 
@@ -405,19 +401,21 @@ collect_summary_inputs(model_runs, results_dir) -> dict
 
 1. Nếu `out_dir/<model_name>_test.csv` đã có và `overwrite=False` thì `FileExistsError`.
 2. Bắt đầu bấm giờ; `evaluate(model, test_loader, device, fp16=fp16)`; dừng bấm giờ (đồng bộ CUDA). `inference_seconds` là thời gian chạy hết `test_loader`, gồm nạp dữ liệu và token hoá, đo cùng một cách cho mọi mô hình.
-3. Ghi `<model_name>_test.csv` với các cột `review_id`, `true_stars`, `pred_raw`, `pred` (`pred = clip_scores(pred_raw)`), đúng thứ tự `test_loader`.
-4. Ghi `<model_name>_test_meta.json`: `model`, `run_name`, `checkpoint_epoch` (lấy từ `run_info` nếu có), `n`, `rmse_raw` (`metrics.rmse(y_true, pred_raw, clip=False)`), `inference_seconds`, `fp16`, `device`.
-5. Trả về `dict` của meta.
+3. Lấy `split_id` từ `run_info` (nếu truyền) hoặc đọc từ `split_stats.json`.
+4. Ghi `<model_name>_test.csv` với các cột `review_id`, `true_stars`, `pred_raw`, `pred` (`pred = clip_scores(pred_raw)`), **`split_id`** đúng thứ tự `test_loader`.
+5. Ghi `<model_name>_test_meta.json`: `model`, `run_name`, `checkpoint_epoch` (lấy từ `run_info` nếu có), `n`, `rmse_raw` (`metrics.rmse(y_true, pred_raw, clip=False)`), `inference_seconds`, `fp16`, `device` và **`split_id`**.
+6. Trả về `dict` của meta.
 
-Điểm thô (`pred_raw`) chỉ nằm trong file trung gian trên Drive; `test_predictions.csv` cuối chỉ chứa điểm đã clip để file nhẹ (theo `docs/design.md` mục 4).
+Điểm thô (`pred_raw`) chỉ nằm trong file trung gian; `test_predictions.csv` cuối chỉ chứa điểm đã clip để file nhẹ (theo `docs/design.md` mục 4).
 
 **`merge_test_predictions(model_names, preds_dir, test_parquet, out_dir)`:**
 
-1. Đọc `<model>_test.csv` của từng `model` trong `model_names` (theo thứ tự đó); kiểm tra mọi file có cùng chuỗi `review_id` và cùng `true_stars`, không thì `ValueError`.
+1. Đọc `<model>_test.csv` của từng `model` trong `model_names` (theo thứ tự đó); kiểm tra mọi file có cùng chuỗi `review_id`, cùng `true_stars`, và **cùng `split_id`**, không thì `ValueError`.
 2. Nếu có `baseline_preds` (đường dẫn hoặc `DataFrame` có cột `review_id`, `pred_baseline`, điểm đã clip): nối theo `review_id`; thiếu hoặc thừa `review_id` thì `ValueError`.
-3. Tạo `test_predictions.csv` với các cột: `review_id`, `true_stars` (số nguyên), `pred_baseline` (chỉ khi có `baseline_preds`, đứng đầu), `pred_<model>` cho từng mô hình theo thứ tự `model_names`, rồi `abs_err_baseline` (nếu có) và `abs_err_<model>` (`|true_stars − pred|`) theo cùng thứ tự. `model_names` chỉ gồm các mô hình Transformer; baseline không có file `baseline_test.csv` mà đi vào qua `baseline_preds`.
-4. Tạo `test_predictions_with_text.csv`: cùng các cột, thêm cột `text` ngay sau `review_id`, lấy từ `test_parquet` bằng `review_id`; `review_id` thiếu thì `ValueError`.
-5. Ghi cả hai bằng `write_atomic`; có file sẵn và `overwrite=False` thì `FileExistsError`. Trả về `DataFrame` của bản không có `text`.
+3. Đọc `test_parquet`. Tạo cột **`n_tokens`** bằng cách dùng tokenizer của `bert-base-uncased` đếm số token văn bản gốc mà không cắt (`truncation=False`).
+4. Tạo `test_predictions.csv` với các cột: `review_id`, `true_stars` (số nguyên), **`n_tokens`**, **`split_id`**, `pred_baseline` (chỉ khi có `baseline_preds`), `pred_<model>` cho từng mô hình theo thứ tự `model_names`, rồi `abs_err_baseline` (nếu có) và `abs_err_<model>` (`|true_stars − pred|`) theo cùng thứ tự. `model_names` chỉ gồm các mô hình Transformer; baseline không có file `baseline_test.csv` mà đi vào qua `baseline_preds`.
+5. Tạo `test_predictions_with_text.csv`: cùng các cột trên, thêm cột `text` ngay sau `review_id`, lấy từ `test_parquet` bằng `review_id`; `review_id` thiếu thì `ValueError`.
+6. Ghi cả hai bằng `write_atomic`; có file sẵn và `overwrite=False` thì `FileExistsError`. Trả về `DataFrame` của bản không có `text`.
 
 **`collect_summary_inputs(model_runs, results_dir)`:** `model_runs` ánh xạ `model` sang `run_name` (ví dụ `{"bert": "bert_mse", "roberta": "roberta", "distilbert": "distilbert"}`). Đọc `runs/<run_name>/run_meta.json` và `preds/<model>_test_meta.json`, trả về
 
@@ -429,10 +427,10 @@ collect_summary_inputs(model_runs, results_dir) -> dict
 
 đúng các tham số của `build_model_summary` (`docs/02_evaluation.md` mục 2.7). Dòng baseline do notebook tự bổ sung vào các từ điển này (`fit_seconds` của baseline làm `train_seconds`, `seconds_per_epoch` và `params_total` để trống, `rmse_raw` tính từ điểm Ridge chưa clip hoặc để trống, `split_id` từ `run_meta`).
 
-### 2.8. Cấu trúc file trên Drive
+### 2.8. Cấu trúc file lưu trữ
 
-```
-drive/project/
+```text
+/working/
 ├── checkpoints/
 │   └── <run_name>/            # bert, roberta, distilbert, bert_mse
 │       ├── best_model.pt
@@ -461,7 +459,7 @@ drive/project/
 | `load_config`, `resolve_output_bias` | `ValueError`, `FileNotFoundError` (xem mục 2.6) |
 | `predict` | `ValueError` nếu danh sách rỗng, phần tử không phải chuỗi, `max_length < 1` hoặc `batch_size < 1` |
 | `load_trained_model` | `FileNotFoundError`; `ValueError` nếu checkpoint thiếu `run_config` hoặc không khớp mô hình |
-| `export_test_predictions`, `merge_test_predictions` | `FileExistsError`; `ValueError` khi các file không khớp `review_id` hoặc nhãn, khi `baseline_preds` hoặc `test_parquet` thiếu `review_id`, hoặc khi `model_names` rỗng |
+| `export_test_predictions`, `merge_test_predictions` | `FileExistsError`; `ValueError` khi các file không khớp `split_id`, `review_id` hoặc nhãn, khi `baseline_preds` hoặc `test_parquet` thiếu `review_id`, hoặc khi `model_names` rỗng |
 | `collect_summary_inputs` | `FileNotFoundError` nếu thiếu `run_meta.json` hoặc file meta dự đoán |
 
 ### 2.10. Tích hợp với các module khác
@@ -488,8 +486,7 @@ drive/project/
 | Lần chạy đối chứng `bert_mse` dùng đủ thiết lập để làm mô hình cuối nếu thắng | Đề xuất |
 | Ngưỡng "thấp hơn đáng kể" để đổi sang MSE | Chưa chốt: nhóm cần đặt con số trước khi xem kết quả (đề xuất: RMSE Val tốt nhất của MSE thấp hơn của Huber ít nhất 1% tương đối, tức `rel_diff_pct_vs_first` từ 1 trở lên). Lưu ý: chỉ có một seed nên 1% có thể nằm trong nhiễu giữa các lần chạy; và RMSE vốn thiên về MSE (cùng hàm mục tiêu) nên nên xét thêm `best_val_mae` trước khi quyết định |
 | Chỉ số chi phí không cùng cơ sở | `train_seconds` của Transformer gồm cả kiểm định Val mỗi epoch; `fit_seconds` của baseline chỉ tính tổ hợp thắng, không tính cả lưới; suy luận baseline chạy CPU còn Transformer chạy GPU và gồm token hoá. Báo cáo phải ghi rõ định nghĩa từng cột và thiết bị (`device` trong `run_meta.json` và meta dự đoán) khi so sánh |
-| `os.replace` trên Drive FUSE có thể không nguyên tử thật sự | Chưa kiểm chứng; nếu nghi ngờ, ghi cục bộ rồi sao chép; `load_checkpoint` lỗi trên tệp hỏng thì chạy lại epoch cuối |
-| `last.pt` xoá khi hoàn tất; ghi thẳng lên Drive mỗi epoch | Đề xuất. Nếu thời gian ghi `last.pt` (khoảng 1,3 GB với BERT) chiếm phần đáng kể của một epoch thì ghi cục bộ rồi sao chép sang Drive; quyết định sau khi đo ở Tuần 1 |
+| `last.pt` xoá khi hoàn tất; ghi thẳng bằng `write_atomic` mỗi epoch | Đã chốt (Tối ưu tiết kiệm I/O trên Kaggle). |
 | Tiếp tục tái lập đến mức từng epoch, không từng bit | Hạn chế đã biết: trạng thái ngẫu nhiên của dropout không được lưu, nên dropout sau điểm tiếp tục khác chạy liền; cuDNN trên GPU không đảm bảo xác định từng bit. Chạy tái lập chính xác chỉ được đảm bảo trên CPU với dropout bằng 0 |
 | Mỗi mô hình huấn luyện một lần (một seed) | Hạn chế đã biết, nêu trong báo cáo (`docs/02_evaluation.md` mục 2.6) |
 | `inference_seconds` đo cả nạp dữ liệu và token hoá | Đề xuất, đo giống nhau cho mọi mô hình |
