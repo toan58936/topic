@@ -15,22 +15,22 @@
 | **05** | `05_dashboard.md` | `app/streamlit_dashboard.py` | `test_dashboard.py` | 02, 04 spec xong (cần CSV schema) — **có thể làm song song từ đầu với CSV dummy** |
 | **06** | `06_integration_test.md` | `tests/test_integration.py`, `scripts/validate_outputs.py` | `test_integration.py` | 04 spec xong (cần train/predict CLI) — **có thể làm song song Phase 0-1** |
 
-**Quy tắc**: Spec phải chốt trước khi code. Code phải pass smoke test + pytest CPU trước khi chạy GPU.
+**Quy tắc**: Spec phải chốt trước khi code. Code phải pass smoke test + pytest CPU trước khi chạy GPU/Kaggle.
 
 ---
 
 ## 2. Chi tiết từng giai đoạn (Execution Phases)
 
 ### Phase 0: Khởi tạo repo & môi trường
+
 | Task | Output |
 |------|--------|
 | Tạo GitHub private repo, cấu trúc thư mục | Repo với `src/`, `docs/`, `tests/`, `configs/`, `notebooks/`, `scripts/`, `app/`, `reports/`, `requirements.txt`, `README.md`, `.gitignore` |
 | Cài đặt local dev env (venv, pre-commit hook pytest) | `pip install -r requirements.txt`, `pre-commit install` |
-| Survey local GPU (form RTX 3070+) | Danh sách fallback runners |
+| Survey Kaggle GPU access | Danh sách fallback runners |
 | Cấu hình CI/CD (GitHub Actions pytest CPU) | `.github/workflows/ci.yml` chạy `pytest tests/` trên PR |
 | Cấu hình pre-commit hooks | `.pre-commit-config.yaml` (pytest, black, isort) |
-| Tạo Colab runner notebook template | `notebooks/colab_runner.ipynb` (mount Drive, clone, install, train, predict) |
-| Tạo Drive sync scripts | `scripts/sync_results.sh` (copy Drive → reports/, commit) |
+| Script sync Kaggle → Drive | `scripts/sync_results.sh` (copy `/kaggle/working/` → `drive/project/`, commit) |
 | Setup Google Drive folder structure | `drive/project/{data,checkpoints,results}` shared |
 
 ---
@@ -38,20 +38,22 @@
 ### Phase 1: Data & Baseline
 
 #### 1.1 Data Setup
+
 | Task | Verify |
 |------|--------|
 | Viết spec `docs/01_data.md` | Spec review bởi Leader |
 | Code `src/data_setup.py` (`prepare_splits`, `create_dataloaders`) | Pass `test_data_setup.py` (CPU, synthetic data) |
-| Chạy `prepare_splits()` trên Colab: tải `review.json`, stratified sample 60k, split 70/15/15, lưu parquet + `split_stats.json` lên Drive | `split_stats.json` hợp lệ schema; Val/Test không trùng text với Train |
+| Chạy `prepare_splits()` trên Kaggle CPU: tải `review.json`, stratified sample 60k, split 70/15/15, lưu parquet + `split_stats.json` lên Drive | `split_stats.json` hợp lệ schema; Val/Test không trùng text với Train |
 | Commit `data_setup.py`, tests; push | PR merged |
 
 #### 1.2 Metrics & Baseline
+
 | Task | Verify |
 |------|--------|
 | Viết spec `docs/02_evaluation.md` | Spec review bởi Leader |
 | Code `src/metrics.py` (clip_scores, MAE/RMSE/R²/Pearson/Spearman, per-star, macro_mae, mean_predictor, model_summary) | Pass `test_metrics.py` |
 | Code `src/baseline.py` (TF-IDF + Ridge, grid 84 combos, Val cố định, joblib save/load) | Pass `test_baseline.py` |
-| Chạy Baseline trên Val (Colab/local CPU), tính ngưỡng mục tiêu: `threshold = 0.85 * RMSE_baseline_val` | Ngưỡng ghi vào Mốc 1 |
+| Chạy Baseline trên Val (Kaggle CPU), tính ngưỡng mục tiêu: `threshold = 0.85 * RMSE_baseline_val` | Ngưỡng ghi vào Mốc 1 |
 | Commit `metrics.py`, `baseline.py`, tests; push | PR merged |
 
 **Deliverable Phase 1**: `split_stats.json` trên Drive, Baseline Val metrics, ngưỡng mục tiêu, code 01-02 pass tests.
@@ -61,6 +63,7 @@
 ### Phase 2: Model & Training Infra
 
 #### 2.1 Model Builder
+
 | Task | Verify |
 |------|--------|
 | Viết spec `docs/03_model.md` | Spec review bởi Leader |
@@ -68,6 +71,7 @@
 | Commit; push | PR merged |
 
 #### 2.2 Engine, Utils, Train, Predict
+
 | Task | Verify |
 |------|--------|
 | Viết spec `docs/04_engine_and_utils.md` | Spec review bởi Leader |
@@ -81,11 +85,12 @@
 
 ---
 
-### Phase 3: Smoke Test & Short GPU Run (Leader chạy trên Colab)
+### Phase 3: Smoke Test & Short GPU Run (Leader chạy trên Kaggle)
+
 | Task | Verify |
 |------|--------|
-| Colab: `git clone`, mount Drive, `pip install -r requirements.txt` | Setup < 10 phút |
-| Smoke test: 8 samples, 1 epoch, batch=16, fp16, BERT Huber | Không lỗi; loss giảm; checkpoint ghi Drive |
+| Kaggle: `git clone`, `pip install -r requirements.txt` | Setup < 10 phút |
+| Smoke test: 8 samples, 1 epoch, batch=16, fp16, BERT Huber | Không lỗi; loss giảm; checkpoint ghi `/kaggle/working/checkpoints/` |
 | Short GPU run: 100 steps (hoặc 1 epoch), đo `seconds_per_epoch`, VRAM usage | `seconds_per_epoch` ghi Mốc 1; ước lượng 3 models × 3 epochs |
 | Fix bug nếu có (OOM → batch=8 + gradient_checkpointing; import error → patch) | Chạy ổn định |
 
@@ -93,7 +98,8 @@
 
 ---
 
-### Phase 4: Full BERT Training (Huber + MSE) — Loss Rule (Leader chạy trên Colab)
+### Phase 4: Full BERT Training (Huber + MSE) — Loss Rule (Leader chạy trên Kaggle)
+
 | Task | Verify |
 |------|--------|
 | **Run 1**: BERT full fine-tune, Huber (δ=1.0), 3 epochs, batch=16, fp16 | Checkpoint/epoch, history.csv, best_model.pt |
@@ -105,7 +111,8 @@
 
 ---
 
-### Phase 5: DistilBERT → RoBERTa (Leader chạy trên Colab)
+### Phase 5: DistilBERT → RoBERTa (Leader chạy trên Kaggle)
+
 | Task | Verify |
 |------|--------|
 | DistilBERT: full fine-tune 3 epochs, loss đã chốt, same setup | Checkpoint, history, Val metrics |
@@ -120,6 +127,7 @@
 ---
 
 ### Phase 6: Validate Outputs → Dashboard Finalize → Error Analysis → Report
+
 | Step | Owner | Task | Verify |
 |------|-------|------|--------|
 | 6.1 | C | Validate pipeline outputs sau Leader training: checkpoints, history.csv, run_meta.json, merge predictions, model_summary.csv, dashboard load | Báo cáo "Pipeline output VALID" hoặc "Issue: ..." |
@@ -131,8 +139,8 @@
 
 ## 3. Mapping Phase → Mốc (Milestones)
 
-| Mốc | Thời hạn | Phase शामिल | Tiêu chí đạt |
-|-----|----------|------------|--------------|
+| Mốc | Thời hạn | Phase | Tiêu chí đạt |
+|-----|----------|-------|--------------|
 | **Mốc 1** | Hết Phase 4 | Phase 0–4 | `split_stats.json`, Baseline Val, ngưỡng 0.85×, `seconds_per_epoch` BERT, Huber vs MSE Val, loss đã chốt |
 | **Mốc 2** | Hết Phase 5 | Phase 5 | 3 models Test predictions, `model_summary.csv` Test, tiêu chí đạt checked |
 | **Mốc 3** | Hết Phase 6 | Phase 6 | Dashboard, error analysis, báo cáo, ai_log |
@@ -143,7 +151,7 @@
 
 | Rủi ro | Trigger | Contingency |
 |--------|---------|-------------|
-| Colab ngắt/OOM | Phase 3, 4, 5 | Checkpoint resume; batch=8 + gradient_checkpointing; fallback freeze_backbone |
+| Kaggle ngắt/OOM | Phase 3, 4, 5 | Checkpoint resume; batch=8 + gradient_checkpointing; fallback freeze_backbone |
 | Hết GPU quota | Phase 5 (RoBERTa) | Bỏ RoBERTa, báo cáo 2 models |
 | Data download/split fail | Phase 1 | Sample 30k test trước; dùng IMDb fallback |
 | Baseline grid search chậm | Phase 1 | `n_jobs=-1`, giảm grid nếu cần |
@@ -155,37 +163,37 @@
 ## 5. Checklist thực thi (Definition of Done per Phase)
 
 ### Phase 0 Done khi:
-- [ ] GitHub private repo ready, protected branches, CI passing
-- [ ] All 6 members: local env verified, `pytest tests/` PASS
-- [ ] `requirements.txt` pinned, `app/requirements.txt` nhẹ
-- [ ] CI/CD (GitHub Actions) running pytest on PR
+- [x] GitHub private repo ready, structure đúng (local)
+- [ ] Protected branches, CI passing (chưa cấu hình GitHub Actions)
+- [x] All members: local env verified, `pytest tests/` PASS (60/60 not slow)
+- [ ] `requirements.txt` pinned (chưa pin exact version)
+- [ ] CI/CD (GitHub Actions) running pytest on PR (chưa cấu hình)
 - [ ] Pre-commit hooks configured (pytest, black, isort)
-- [ ] `notebooks/colab_runner.ipynb` template ready
-- [ ] `scripts/sync_results.sh` working
+- [ ] Script sync Kaggle → Drive working
 - [ ] Google Drive folder structure created, shared
-- [ ] Local GPU survey completed
-- [ ] Docs synced, `ai_log.md` created
+- [ ] Kaggle GPU access confirmed
+- [x] Docs synced, `ai_log.md` created
 
 ### Phase 1 Done khi:
-- [ ] `split_stats.json` trên Drive, schema đúng
-- [ ] Baseline Val MAE/RMSE/R² + mean predictor
-- [ ] Ngưỡng `0.85 * RMSE_baseline_val` tính được
-- [ ] `data_setup.py`, `metrics.py`, `baseline.py` pass pytest CPU
+- [ ] `split_stats.json` trên Drive, schema đúng (chưa chạy trên review.json thật)
+- [ ] Baseline Val MAE/RMSE/R² + mean predictor (chưa chạy trên dữ liệu thật)
+- [ ] Ngưỡng `0.85 * RMSE_baseline_val` tính được (chưa chạy trên dữ liệu thật)
+- [x] `data_setup.py`, `metrics.py`, `baseline.py` pass pytest CPU
 - [ ] PR merged vào main
 
 ### Phase 2 Done khi:
-- [ ] `model_builder.py`, `utils.py`, `engine.py`, `train.py`, `predict.py` pass pytest CPU
-- [ ] 3 backbone build được với tiny config
+- [x] `model_builder.py`, `utils.py`, `engine.py`, `train.py`, `predict.py` pass pytest CPU
+- [x] 3 backbone build được với tiny config
 - [ ] PR merged
 
 ### Phase 3 Done khi:
-- [ ] Colab setup < 10p, mount Drive OK
+- [ ] Kaggle setup < 10p, clone OK
 - [ ] Smoke test 8 samples pass
 - [ ] Short run 100 steps: `seconds_per_epoch` ghi nhận, VRAM < 14GB
 
 ### Phase 4 Done khi:
-- [ ] BERT Huber 3 epochs xong, checkpoint Drive
-- [ ] BERT MSE 3 epochs xong, checkpoint Drive
+- [ ] BERT Huber 3 epochs xong, checkpoint `/kaggle/working/checkpoints/bert/` + Drive
+- [ ] BERT MSE 3 epochs xong, checkpoint `/kaggle/working/checkpoints/bert/` + Drive
 - [ ] Loss rule áp dụng, quyết định ghi `ai_log.md`
 - [ ] Mốc 1 docs hoàn tất
 
@@ -196,9 +204,9 @@
 - [ ] Tiêu chí đạt (Define Mục 4) checked: RMSE_BERT ≤ 0.85× baseline Val, MacroMAE_BERT ≤ baseline Val
 
 ### Phase 6 Done khi:
-- [ ] Dashboard chạy local, đọc CSV đúng
-- [ ] `error_analysis.csv` 40 review, 5 nhóm, Leader cross-check
-- [ ] Báo cáo PDF + `ai_log.md` hoàn chỉnh
+- [x] Dashboard chạy local, đọc CSV đúng (code viết xong, test pass, nhưng chưa có CSV thật)
+- [ ] `error_analysis.csv` 40 review, 5 nhóm, Leader cross-check (chưa làm trên dữ liệu thật)
+- [ ] Báo cáo PDF + `ai_log.md` hoàn chỉnh (ai_log có entries Phase 1,2,3,6; thiếu 4,5)
 - [ ] Demo sẵn sàng
 
 ---
@@ -219,4 +227,4 @@
 
 ---
 
-> **Lưu ý**: Plan này thay thế lịch theo tuần ở Define Mục 13. Mốc 1/2/3 giữ nguyên định nghĩa, chỉ chi tiết hóa phase gate để dễ theo dõi và quản trị rủi ro.
+> **Lưu ý**: Plan này thay thế lịch theo tuần ở Define Mục 13. Mốc 1/2/3 giữ nguyên định nghĩa, chỉ chi tiết hóa phase gate để dễ theo dõi và quản trị rủi ro. Training chạy trên **Kaggle GPU**, lưu data/checkpoints trên **Google Drive**, dev/test chạy **local**.

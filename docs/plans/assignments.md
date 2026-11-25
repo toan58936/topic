@@ -1,7 +1,7 @@
 # Task Assignments — 7 Members (Leader + A–F Implementers)
 
 > **6 Implementers (A–F)**: Spec + Code + Unit Test + PR cho 1 module (C gộp thêm Integration Test)
-> **Leader**: Chạy training Colab, Review PR, Điều phối, Báo cáo, Demo
+> **Leader**: Chạy training Kaggle, Review PR, Điều phối, Báo cáo, Demo
 
 ---
 
@@ -17,7 +17,7 @@
 7. AI LOG: Cập nhật docs/ai_log.md (prompt, smoke test, check description)
 ```
 
-**Công cụ**: GitHub (PR, CI), Colab (training), Drive (data, checkpoints), Local (dev, dashboard).
+**Công cụ**: GitHub (PR, CI), Kaggle (training), Drive (data, checkpoints), Local (dev, dashboard).
 
 ---
 
@@ -25,7 +25,7 @@
 
 | Hạng mục | Chi tiết |
 |----------|----------|
-| **Scope** | Chạy training Colab (Phase 3-5), Review 6 PR, Loss rule decision, Quota management, Tổng hợp báo cáo, Demo |
+| **Scope** | Chạy training Kaggle (Phase 3-5), Review 6 PR, Loss rule decision, Quota management, Tổng hợp báo cáo, Demo |
 | **Specs tham chiếu** | `Define.md`, `Design.md`, `workflow.md`, `implementation.md`, `assignments.md` |
 | **Deliverables** | - Training runs: BERT Huber/MSE, DistilBERT, RoBERTa (nếu quota)<br>- Test predictions merge & commit `reports/`<br>- Loss rule decision (Phase 4)<br>- RoBERTa skip decision (Phase 5)<br>- Báo cáo PDF hoàn chỉnh<br>- Demo script & rehearsal<br>- `docs/ai_log.md` entries: Phase 0, 3, 4, 5, 6 |
 | **GitHub** | - Tạo repo, invite 6 thành viên<br>- Cấu hình branch protection, CI<br>- Review & merge 6 PR (A–F) trong 4h<br>- Commit `reports/test_predictions.csv`, `model_summary.csv` sau training |
@@ -73,7 +73,7 @@
 | **Tests** | `tests/test_model_builder.py` + `tests/test_integration.py` |
 | **Deliverables (Model)** | - `BACKBONES` dict: bert, roberta, distilbert (hf_name, model_type, drop_pooler)<br>- `build_model()`: TextRegressor với mean/cls pooling, dropout, Linear head<br>- `build_tokenizer()`: tokenizer đúng cặp backbone<br>- `count_parameters()`: total + trainable<br>- 3 backbone build được với tiny random config<br>- Code pass pytest CPU<br>- PR merged → `develop` |
 | **Deliverables (Integration Test)** | - **Integration test suite**: Data → Model → Train → Predict → Dashboard<br>- **Validation scripts**: `scripts/validate_outputs.py` (check checkpoints, history, run_meta, predictions merge)<br>- **Pipeline validation report** sau mỗi lần Leader chạy training:<br>  &nbsp;&nbsp;✓ Checkpoints tồn tại, history.csv 3 epochs<br>  &nbsp;&nbsp;✓ run_meta.json đúng spec (backbone, loss, seed, split_id, versions)<br>  &nbsp;&nbsp;✓ Merge predictions: split_id/review_id/true_stars khớp<br>  &nbsp;&nbsp;✓ model_summary.csv đủ 5 dòng, metrics hợp lý<br>  &nbsp;&nbsp;✓ Dashboard load CSV không lỗi<br>- Báo cáo Leader: "Pipeline output VALID" hoặc "Issue: ..." |
-| **Verification** | - Chạy pipeline full trên Colab staging (sample data) trước production<br>- Validate resume từ checkpoint<br>- Validate `sync_results.sh` copy Drive → reports/ → commit |
+| **Verification** | - Chạy pipeline full trên Kaggle staging (sample data) trước production<br>- Validate resume từ checkpoint<br>- Validate `sync_results.sh` copy Kaggle → Drive → reports/ → commit |
 | **GitHub** | `feature/model-builder` → PR → `develop` (model); `feature/integration-test` → PR → `develop` (integration test, ưu tiên merge sớm) |
 | **AI Log** | Phase 0 (integration test setup), Phase 2 (model building), Phase 3 (staging validation), Phase 5 (production validation) |
 | **Dependencies** | Cần B xong `metrics.py` (param count interface); Cần F xong training CLI (`train.py`, `predict.py`); Cần Leader chạy training production |
@@ -129,13 +129,13 @@
 
 | | A (Data) | B (Eval) | C (Model + Integration) | D (Train Infra Core) | F (Train CLI) | E (Dashboard) | Leader (Training) |
 |---|----------|----------|-------------------------|-----------------|---------------|----------------|-------------------|
-| **A (Data)** | — | Val set format | — | — | — | `prepare_splits()` |
-| **B (Eval)** | Val set format | — | — | — | — | Threshold |
-| **C (Model + Integration)** | — | Param count interface | — | `build_model`, `count_parameters` | — | Backbones, Validate outputs |
-| **D (Train Infra Core)** | — | — | Model interface | — | — | `train_epoch`, `eval_epoch`, checkpoint |
-| **F (Train CLI)** | — | — | Model interface | `train_epoch`, `eval_epoch` | — | `train.py`, `predict.py` CLI |
-| **E (Dashboard)** | — | — | — | CSV schema | — | Real CSV |
-| **Leader (Training)** | Data splits | Threshold | Model code, Validation | Core infra, CLI | — | **Chạy training** |
+| **A (Data)** | — | Val set format | — | — | — | — | `prepare_splits()` |
+| **B (Eval)** | Val set format | — | — | — | — | — | Threshold |
+| **C (Model + Integration)** | — | Param count interface | — | `build_model`, `count_parameters` | — | — | Backbones, Validate outputs |
+| **D (Train Infra Core)** | — | — | Model interface | — | — | — | `train_epoch`, `eval_epoch`, checkpoint |
+| **F (Train CLI)** | — | — | Model interface | `train_epoch`, `eval_epoch` | — | — | `train.py`, `predict.py` CLI |
+| **E (Dashboard)** | — | — | — | CSV schema | — | — | Real CSV |
+| **Leader (Training)** | Data splits | Threshold | Model code, Validation | Core infra, CLI | — | — | **Chạy training** |
 
 **Critical Path**: A → B → C → D → F → **Leader Training (Phase 3-5)** → C Validate → E Finalize → Leader Report
 
@@ -150,7 +150,7 @@
 | Baseline & threshold | A | I | R | I | I | I | I |
 | Model builder | A | I | I | R | I | I | I |
 | Training infra | A | I | I | I | R | C | I |
-| **Colab Training (Phase 3-5)** | **R** | I | I | I | C | C | I |
+| **Kaggle Training (Phase 3-5)** | **R** | I | I | I | C | C | I |
 | Integration Test | A | I | I | **R** | C | C | I |
 | Dashboard | A | I | I | I | I | I | R |
 | Error Analysis | A | I | I | I | I | I | R |
@@ -174,4 +174,4 @@
 ---
 
 > **Lưu ý**: Mọi deliverable phải có **PR merged** + **pytest PASS** + **AI log entry** mới coi là done. Leader không merge PR nếu thiếu 3 tiêu chí này.
-> **Leader là người duy nhất chạy training production trên Colab**. C validate outputs, E finalize dashboard/error analysis sau khi validate PASS.
+> **Leader là người duy nhất chạy training production trên Kaggle**. C validate outputs, E finalize dashboard/error analysis sau khi validate PASS.

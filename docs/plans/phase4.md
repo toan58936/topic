@@ -9,18 +9,20 @@
 ### Run 1: BERT + Huber (δ=1.0)
 - [ ] Config: `configs/train_bert_huber.yaml`
   - backbone: bert, pooling: mean, loss: huber, epochs: 3, batch: 16, lr: 2e-5, fp16: true
-- [ ] Run on Colab: `python -m src.train --config configs/train_bert_huber.yaml`
+- [ ] Run on Kaggle: `python -m src.train --config configs/train_bert_huber.yaml`
 - [ ] Verify:
   - [ ] 3 epochs completed
-  - [ ] Checkpoint per epoch saved to Drive (`drive/project/checkpoints/bert/epoch_{1,2,3}.pt`)
+  - [ ] Checkpoint per epoch saved to `/kaggle/working/checkpoints/bert/` (last.pt, best_model.pt)
   - [ ] `best_model.pt` = epoch with lowest Val RMSE (clipped)
   - [ ] `history.csv` has: epoch, train_loss, val_rmse, val_mae, epoch_seconds
   - [ ] `run_meta.json` saved (backbone, pooling, loss, seed, lr, batch, epochs, torch/transformers version, GPU, commit_hash, split_id)
+  - [ ] Sync kết quả về Drive (`drive/project/checkpoints/bert/`)
 
 ### Run 2: BERT + MSE
 - [ ] Config: `configs/train_bert_mse.yaml` (same as above, loss: mse)
-- [ ] Run on Colab
+- [ ] Run on Kaggle
 - [ ] Verify same artifacts as Run 1
+- [ ] Sync kết quả về Drive (`drive/project/checkpoints/bert/`)
 
 ---
 
@@ -56,8 +58,8 @@
 
 ## 4.4 Deliverables
 
-- [ ] BERT Huber checkpoints on Drive
-- [ ] BERT MSE checkpoints on Drive
+- [ ] BERT Huber checkpoints on `/kaggle/working/checkpoints/bert/` + Drive
+- [ ] BERT MSE checkpoints on `/kaggle/working/checkpoints/bert/` + Drive
 - [ ] Loss rule decision recorded in `ai_log.md` + Leader approved
 - [ ] Phase 5 configs updated with chosen loss
 - [ ] Milestone 1 data ready: `split_stats.json`, Baseline Val, threshold, `seconds_per_epoch`, Huber vs MSE Val, loss decided

@@ -1,20 +1,16 @@
 # Phase 3 Checklist: Smoke Test & Short GPU Run
 
-> Verify pipeline works on GPU before full training. Owner: D (Training), C (Model support).
+> Verify pipeline works on Kaggle GPU before full training. Owner: D (Training), C (Model support).
 
 ---
 
-## 3.1 Colab Environment Setup (D)
+## 3.1 Kaggle Environment Setup (D)
 
-- [ ] Mở Colab notebook: `notebooks/colab_runner.ipynb`
-- [ ] Mount Google Drive:
-  ```python
-  from google.colab import drive
-  drive.mount('/content/drive')
-  ```
+- [ ] Mở Kaggle Notebook (GPU T4/P100)
+- [ ] Gắn Dataset Yelp làm Input: `/kaggle/input/yelp-dataset/` (file `review.json`)
 - [ ] Clone repo:
   ```bash
-  cd /content/drive/MyDrive/project
+  cd /kaggle/working
   git clone <repo-url> repo
   cd repo
   ```
@@ -28,9 +24,10 @@
   print(torch.__version__, transformers.__version__)
   print(torch.cuda.is_available(), torch.cuda.get_device_name(0))
   ```
-- [ ] Copy data từ Drive về local Colab (faster I/O):
+- [ ] Copy data từ Input Dataset về working (faster I/O):
   ```bash
-  cp /content/drive/MyDrive/project/data/*.parquet /content/
+  cp /kaggle/input/yelp-topic7-splits/*.parquet /kaggle/working/data/
+  cp /kaggle/input/yelp-topic7-splits/split_stats.json /kaggle/working/data/
   ```
 
 ---
@@ -58,7 +55,7 @@
   - [ ] Không lỗi import/runtime
   - [ ] Loss hợp lệ (không NaN/Inf)
   - [ ] Mỗi batch ra output shape [B]
-  - [ ] Checkpoint ghi được (`/content/drive/MyDrive/project/checkpoints/bert/epoch_1.pt`)
+  - [ ] Checkpoint ghi được (`/kaggle/working/checkpoints/bert/last.pt`)
   - [ ] `history.csv` có 1 dòng: epoch, train_loss, val_rmse, val_mae, epoch_seconds
 
 ---
@@ -83,10 +80,10 @@
 | Issue | Fix |
 |-------|-----|
 | OOM (Out of Memory) | `batch_size: 8`, `gradient_checkpointing: true` |
-| Drive mount timeout | Re-mount, check quota |
 | Import error transformers | `pip install -U transformers accelerate` |
 | Loss NaN | Check fp16: ép `.float()` trước loss, giảm lr |
-| Checkpoint not saving | Check Drive path permissions, disk space |
+| Checkpoint not saving | Check `/kaggle/working` path permissions, disk space |
+| Dataset not found | Verify `/kaggle/input/yelp-topic7-splits/` mounted as Input |
 
 ---
 
@@ -107,14 +104,14 @@
 ## 3.6 Estimate Full Training Time
 
 - [ ] Based on `seconds_per_epoch` × 3 epochs × 3 models
-- [ ] Add buffer: +30% for Colab overhead, checkpoint save, eval
+- [ ] Add buffer: +30% for Kaggle overhead, checkpoint save, eval
 - [ ] Record estimate in `ai_log.md` for Leader planning
 
 ---
 
 ## 3.7 Deliverables
 
-- [ ] Smoke test PASS (Colab)
+- [ ] Smoke test PASS (Kaggle)
 - [ ] Short GPU run PASS, `seconds_per_epoch` recorded
 - [ ] VRAM usage recorded (< 14GB on T4)
 - [ ] Resume mechanism verified

@@ -33,6 +33,7 @@
   - [x] History CSV per run (`history.csv` + `run_meta.json`)
 - [x] Code `src/train.py`: CLI config, `set_seed` before `build_model`, log run_meta
 - [x] Code `src/predict.py`: load weights (build_model pretrained=False + state_dict), predict, clip, export test_predictions.csv, merge validation
+  - [ ] Hàm `main()` cho `python -m src.predict` (chưa có, phase5 cần)
 
 ---
 
@@ -69,13 +70,13 @@
 
 ---
 
-## 2.3 Verification (Colab GPU)
+## 2.3 Verification (Kaggle GPU)
 
-- [ ] Colab: `git clone`, mount Drive, `pip install -r requirements.txt` (< 10 min)
+- [ ] Kaggle: `git clone`, `pip install -r requirements.txt` (< 10 min)
 - [ ] Smoke test: 8 samples, 1 epoch, batch=16, fp16, BERT Huber
   - [ ] No errors
   - [ ] Loss valid (not NaN)
-  - [ ] Checkpoint saved to Drive
+  - [ ] Checkpoint saved to `/kaggle/working/checkpoints/`
 - [ ] Short GPU run: 100 steps (or 1 epoch), measure `seconds_per_epoch`, VRAM
   - [ ] `seconds_per_epoch` recorded for Milestone 1
   - [ ] VRAM < 14GB (T4 16GB)
@@ -85,9 +86,9 @@
 
 ## 2.4 Deliverables
 
-- [ ] `model_builder.py`, `utils.py`, `engine.py`, `train.py`, `predict.py` + tests committed
-- [ ] All pytest CPU PASS
-- [ ] Smoke test PASS (Colab)
+- [x] `model_builder.py`, `utils.py`, `engine.py`, `train.py`, `predict.py` + tests committed
+- [x] All pytest CPU PASS (60/60 not slow)
+- [ ] Smoke test PASS (Kaggle)
 - [ ] Short GPU run PASS, `seconds_per_epoch` recorded
 - [ ] PRs merged to `develop`
 
@@ -102,8 +103,8 @@
 ## 2.6 Phase Gate: Phase 2 → Phase 3
 
 **PASS Criteria** (Leader approve):
-- [ ] All 5 test files PASS (CPU)
-- [ ] 3 backbones build with tiny config
+- [x] All 5 test files PASS (CPU)
+- [x] 3 backbones build with tiny config
 - [ ] Smoke test + short GPU run PASS
 - [ ] `seconds_per_epoch` recorded
 - [ ] Code merged to `develop`

@@ -104,7 +104,7 @@ Ba checkpoint khác nhau về tiền huấn luyện và tokenizer, nên kết lu
 - Mã nguồn dạng module (`src/`) trên GitHub riêng tư, kèm README (có tên người phụ trách từng mảng và phiên bản dữ liệu) và hướng dẫn cài đặt/chạy (`requirements.txt`).
 - Dữ liệu đã chia cố định và `split_stats.json` trên Drive.
 - Trọng số mô hình (`.pt`/`.pth`) lưu trên Drive.
-- Notebook chạy trên Kaggle / Colab.
+- Notebook chạy trên Kaggle .
 - Dashboard trực quan trình bày kết quả: bảng so sánh các mô hình, biểu đồ (điểm dự đoán so với điểm thật, phân phối sai số, sai số theo từng mức sao) và các ca đoán sai điển hình, đọc từ `test_predictions.csv` và `model_summary.csv`. Công cụ dựng dashboard nằm ở tài liệu Design.
 - Báo cáo (có mục Giới hạn), kèm nhật ký dùng AI.
 
@@ -164,7 +164,7 @@ Xem chi tiết phase gate và timeline trong `plans/implementation.md` (Phase 0�
 
 | Rủi ro | Cách xử lý |
 | --- | --- |
-| Mất kết nối Kaggle/Colab | Bật `fp16`, lưu checkpoint lên Drive mỗi epoch, resume `auto` |
+| Mất kết nối Kaggle | Bật `fp16`, lưu checkpoint lên Drive mỗi epoch, resume `auto` |
 | Hết hạn mức GPU | Thứ tự BERT → DistilBERT → RoBERTa; thiếu quota thì bỏ trọn RoBERTa |
 | Dữ liệu lớn / tải chậm | Tải một lần, đọc theo khối, stratified sample 60k một lần |
 | Overfit | Theo dõi loss Val; early stopping implicit qua checkpoint selection |

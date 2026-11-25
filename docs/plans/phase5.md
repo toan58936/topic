@@ -8,10 +8,10 @@
 
 - [ ] Config: `configs/train_distilbert.yaml`
   - backbone: distilbert, pooling: mean, loss: [chosen from Phase 4], epochs: 3, batch: 16, lr: 2e-5, fp16: true
-- [ ] Run on Colab
+- [ ] Run on Kaggle
 - [ ] Verify:
   - [ ] 3 epochs completed
-  - [ ] Checkpoints + best_model.pt + history.csv + run_meta.json on Drive (`drive/project/checkpoints/distilbert/`)
+  - [ ] Checkpoints + best_model.pt + history.csv + run_meta.json on `/kaggle/working/checkpoints/distilbert/` + Drive
 
 ---
 
@@ -20,8 +20,8 @@
 - [ ] **Check GPU quota remaining** before starting
 - [ ] If quota sufficient:
   - [ ] Config: `configs/train_roberta.yaml` (same setup, backbone: roberta)
-  - [ ] Run on Colab
-  - [ ] Verify artifacts on Drive (`drive/project/checkpoints/roberta/`)
+  - [ ] Run on Kaggle
+  - [ ] Verify artifacts on `/kaggle/working/checkpoints/roberta/` + Drive
 - [ ] If quota **insufficient**:
   - [ ] **Skip RoBERTa entirely** (do not reduce epochs/batch for any model)
   - [ ] Document in `ai_log.md`: "RoBERTa skipped due to GPU quota limit"
@@ -34,12 +34,13 @@
 
 - [ ] Run `predict.py` for **each completed model + baseline**:
   ```bash
-  python -m src.predict --checkpoint drive/project/checkpoints/bert/best_model.pt --output results/preds/bert_test.csv
-  python -m src.predict --checkpoint drive/project/checkpoints/distilbert/best_model.pt --output results/preds/distilbert_test.csv
-  # python -m src.predict --checkpoint drive/project/checkpoints/roberta/best_model.pt --output results/preds/roberta_test.csv  # if run
-  python -m src.predict --baseline results/preds/baseline_val.pkl --output results/preds/baseline_test.csv
+  python -m src.predict --checkpoint /kaggle/working/checkpoints/bert/best_model.pt --output /kaggle/working/results/preds/bert_test.csv
+  python -m src.predict --checkpoint /kaggle/working/checkpoints/distilbert/best_model.pt --output /kaggle/working/results/preds/distilbert_test.csv
+  # python -m src.predict --checkpoint /kaggle/working/checkpoints/roberta/best_model.pt --output /kaggle/working/results/preds/roberta_test.csv  # if run
+  python -m src.predict --baseline results/preds/baseline_val.pkl --output /kaggle/working/results/preds/baseline_test.csv
   ```
 - [ ] Each output: `review_id`, `true_stars`, `pred`, `split_id`
+- [ ] Sync predictions về Drive (`drive/project/results/preds/`)
 
 ---
 
@@ -79,7 +80,7 @@
 
 ## 5.7 Deliverables
 
-- [ ] All model checkpoints on Drive
+- [ ] All model checkpoints on `/kaggle/working/checkpoints/` + Drive
 - [ ] `test_predictions.csv`, `test_predictions_with_text.csv`, `model_summary.csv` on Drive
 - [ ] `test_predictions.csv`, `model_summary.csv` committed to `reports/`
 - [ ] Milestone 2 criteria checked & recorded

@@ -3,6 +3,7 @@
 > Quy trình làm việc chuẩn cho toàn nhóm: Git/GitHub, AI collaboration, Phase gates, Definition of Done.
 
 ---
+
 1. ĐỌC assignments.md → Xác nhận module, spec, branch name
 2. ĐỌC implementation.md → Hiểu phase nào, deliverable gì, deadline
 3. ĐỌC workflow.md → Hiểu Git flow, AI 4 bước, Phase gate, AI log
@@ -121,25 +122,25 @@ Hãy xuất code hoàn chỉnh.
 # Local CPU
 pytest tests/test_<module>.py -v --tb=short
 
-# Colab GPU (8 samples, 1 epoch)
-python -m src.train --config configs/smoke_test.yaml --epochs 1 --max-steps 8
+# Kaggle GPU (8 samples, 1 epoch)
+python -m src.train --config configs/smoke_test.yaml
 ```
 
 **Pass criteria**:
 - ✅ Không lỗi import/runtime
 - ✅ Mỗi review ra 1 số thực
 - ✅ Loss hợp lệ (không NaN/Inf)
-- ✅ Checkpoint ghi được (Drive/Colab local)
+- ✅ Checkpoint ghi được (`/kaggle/working/checkpoints/`)
 
 ### 2.3 Bước 3: Run Model (Full GPU)
 ```bash
-# Colab
+# Kaggle
 python -m src.train --config configs/train_bert_huber.yaml
 ```
 
 **Pass criteria**:
 - ✅ Chạy hoàn tất 3 epochs
-- ✅ Checkpoint mỗi epoch lên Drive
+- ✅ Checkpoint mỗi epoch lên `/kaggle/working/checkpoints/` (sync Drive)
 - ✅ `history.csv` có train_loss, val_rmse, val_mae, epoch_seconds
 - ✅ `best_model.pt` là epoch có Val RMSE thấp nhất
 
@@ -162,7 +163,7 @@ python -m src.train --config configs/train_bert_huber.yaml
 
 ## 3. Phase Gate & Definition of Done
 
-Mỗi Phase có file checklist riêng: `plans/phase1.md`, `phase2.md`... 
+Mỗi Phase có file checklist riêng: `plans/phase1.md`, `phase2.md`...
 
 ### 3.1 Phase Gate Rules
 | Gate | Điều kiện PASS | Ai approve |
@@ -186,7 +187,7 @@ Mỗi Phase có file checklist riêng: `plans/phase1.md`, `phase2.md`...
 
 ### Verification
 - [ ] `pytest tests/test_<module>.py` PASS (CPU)
-- [ ] Smoke test PASS (Colab GPU, 8 samples)
+- [ ] Smoke test PASS (Kaggle GPU, 8 samples)
 - [ ] Short GPU run PASS (100 steps, metrics logged)
 
 ### Deliverables
@@ -244,7 +245,7 @@ project/
 │   ├── train_roberta.yaml
 │   └── smoke_test.yaml
 ├── notebooks/
-│   └── colab_runner.ipynb
+│   └── kaggle_runner.ipynb       # Kaggle notebook (thay thế colab_runner.ipynb)
 ├── app/
 │   ├── streamlit_dashboard.py
 │   └── requirements.txt
@@ -288,7 +289,7 @@ Mỗi entry một dòng:
 
 ### Smoke Test
 - pytest: PASS (12/12)
-- Colab 8 samples: PASS, loss=1.23, checkpoint saved
+- Kaggle 8 samples: PASS, loss=1.23, checkpoint saved
 
 ### Run Model
 - prepare_splits(): 60k sampled, split 42k/9k/9k, split_stats.json uploaded
@@ -314,14 +315,17 @@ pre-commit install
 # Run tests (CPU)
 pytest tests/ -v --tb=short
 
-# Smoke test (Colab)
+# Smoke test (Kaggle)
 python -m src.train --config configs/smoke_test.yaml
 
-# Full train (Colab)
+# Full train (Kaggle)
 python -m src.train --config configs/train_bert_huber.yaml
 
 # Predict Test
-python -m src.predict --checkpoint drive/project/checkpoints/bert/best_model.pt --output results/preds/bert_test.csv
+python -m src.predict --checkpoint /kaggle/working/checkpoints/bert/best_model.pt --output /kaggle/working/results/preds/bert_test.csv
+
+# Sync results Kaggle → Drive
+bash scripts/sync_results.sh
 
 # Dashboard (local)
 cd app && streamlit run streamlit_dashboard.py

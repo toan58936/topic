@@ -1,13 +1,13 @@
 # Phase 0 Checklist: Khởi tạo Repo & Môi trường
 
-> Repo setup, dev environment, local GPU survey. Owner: Leader (repo), All (local setup), Leader (survey).
+> Repo setup, dev environment, Kaggle GPU access survey. Owner: Leader (repo), All (local setup), Leader (survey).
 
 ---
 
 ## 0.1 GitHub Repository Setup (Leader)
 
-- [ ] Tạo **private repository** trên GitHub (organization hoặc personal)
-- [ ] Cấu trúc thư mục khởi tạo:
+- [x] Tạo **private repository** trên GitHub (organization hoặc personal)
+- [x] Cấu trúc thư mục khởi tạo:
   ```
   project/
   ├── .github/
@@ -29,7 +29,7 @@
   ├── notebooks/
   ├── app/
   ├── reports/
-  ├── plans/
+  ├── scripts/
   ├── requirements.txt
   ├── README.md
   └── .gitignore
@@ -47,13 +47,13 @@
 
 ## 0.2 Local Development Environment (All Members)
 
-- [ ] Clone repo: `git clone <repo-url>`
-- [ ] Tạo virtual environment:
+- [x] Clone repo: `git clone <repo-url>`
+- [x] Tạo virtual environment:
   ```bash
   python -m venv .venv
   source .venv/bin/activate  # Windows: .venv\Scripts\activate
   ```
-- [ ] Cài dependencies:
+- [x] Cài dependencies:
   ```bash
   pip install -r requirements.txt
   ```
@@ -61,7 +61,7 @@
   ```bash
   pre-commit install
   ```
-- [ ] Verify pytest chạy:
+- [x] Verify pytest chạy:
   ```bash
   pytest tests/ -v --tb=short
   ```
@@ -75,7 +75,6 @@
   ```
   torch==2.4.0+cu121
   transformers==4.44.0
-  accelerate==0.33.0
   scikit-learn==1.5.1
   pandas==2.2.2
   numpy==1.26.4
@@ -83,10 +82,9 @@
   joblib==1.4.2
   streamlit==1.37.0
   pytest==8.2.2
-  pre-commit==3.7.1
   pyyaml==6.0.1
-  polars==0.20.15  # for data processing
   ```
+  *Lưu ý: `requirements.txt` hiện có tên gói nhưng chưa pin exact version.*
 - [ ] `app/requirements.txt` (dashboard only, no torch):
   ```
   streamlit==1.37.0
@@ -98,38 +96,36 @@
 
 ---
 
-## 0.4 Local GPU Survey (Leader)
+## 0.4 Kaggle GPU Access Survey (Leader)
 
 - [ ] Gửi form cho 5 thành viên:
-  - GPU model (RTX 3060 12GB / 3070 8GB / 3080 10GB / 3090 24GB / 4070 12GB / 4090 24GB / other)
-  - VRAM
-  - CUDA version installed (`nvidia-smi`)
-  - PyTorch CUDA working? (`python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"`)
-  - Sẵn sàng chạy training local 30-60 phút?
-- [ ] Tổng hợp kết quả → danh sách fallback runners
-- [ ] Nếu ≥2 người có RTX 3070+ → Plan B: chia chạy song song trên local
+  - Có tài khoản Kaggle? (có/không)
+  - Đã thêm số điện thoại để bật GPU (T4/P100) chưa?
+  - Thời gian sẵn sàng chạy training trên Kaggle (giờ/ngày)?
+  - Có dùng Google Drive để lưu data/checkpoints không?
+- [ ] Tổng hợp kết quả → danh sách fallback runners (Kaggle account)
+- [ ] Xác nhận ≥2 thành viên có thể chạy Kaggle GPU để backup lẫn nhau
 
 ---
 
-## 0.5 Google Drive Setup (Leader)
+## 0.5 Google Drive Storage Setup (Leader)
 
-- [ ] Tạo folder chung: `drive/project/`
+- [ ] Tạo folder chung trên Drive: `data/`, `checkpoints/`, `results/`
   ```
-  drive/project/
+  My Drive/YelpTopic/
   ├── data/               # train.parquet, val.parquet, test.parquet, split_stats.json
   ├── checkpoints/        # bert/, distilbert/, roberta/ (best_model.pt, epoch_*.pt)
   └── results/            # preds/, test_predictions.csv, model_summary.csv, charts
   ```
-- [ ] Chia sẻ folder với 6 thành viên (Editor access)
-- [ ] Không đặt link công khai (restricted access)
+- [ ] `.gitignore` bỏ qua `data/`, `*.pt`, `__pycache__/`, `reports/*_with_text.csv`, `kaggle/`
 
 ---
 
 ## 0.6 Documentation Sync
 
-- [ ] Copy `Tài liệu Define.md`, `Tài liệu Design.md`, `CHECKLIST.md` vào `docs/define&designt/`
-- [ ] Copy `implementation.md`, `workflow.md` vào `plans/`
-- [ ] Tạo `docs/ai_log.md` với header:
+- [x] Copy `Tài liệu Define.md`, `Tài liệu Design.md`, `CHECKLIST.md` vào `docs/define&designt/`
+- [x] Copy `implementation.md`, `workflow.md` vào `plans/`
+- [x] Tạo `docs/ai_log.md` với header:
   ```markdown
   # AI Collaboration Log — Đề tài 7 Text Regression (Yelp)
 
@@ -141,17 +137,17 @@
 ## 0.7 Deliverables
 
 - [ ] GitHub private repo với structure đúng, protected branches, CI
-- [ ] Tất cả 6 thành viên: local env chạy `pytest tests/` PASS
+- [x] Tất cả 6 thành viên: local env chạy `pytest tests/` PASS (60/60 not slow)
 - [ ] `requirements.txt` pinned, `app/requirements.txt` nhẹ
-- [ ] Local GPU survey kết quả ghi nhận
-- [ ] Google Drive folder structure created, shared
-- [ ] Docs synced, `ai_log.md` created
+- [ ] Kaggle GPU access kết quả ghi nhận (≥2 thành viên)
+- [ ] Google Drive storage folder created (`data/`, `checkpoints/`, `results/`)
+- [x] Docs synced, `ai_log.md` created
 
 ---
 
 ## 0.8 AI Log
 
-- [ ] `docs/ai_log.md` updated với Phase 0 entries (Leader)
+- [x] `docs/ai_log.md` updated với Phase 0 entries (Leader)
 
 ---
 
@@ -159,9 +155,9 @@
 
 **PASS Criteria** (Leader approve):
 - [ ] Repo ready, CI passing (pytest on empty tests)
-- [ ] All members local env verified
-- [ ] Drive folder ready
-- [ ] GPU survey done
+- [x] All members local env verified
+- [ ] Kaggle GPU access confirmed
+- [ ] Drive storage ready
 
 **Sign-off**:
 - Leader: _______________ / Date: _______________

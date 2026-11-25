@@ -7,13 +7,15 @@
 ## 6.1 Dashboard (E)
 
 ### Development
+
 - [ ] Spec `docs/05_dashboard.md` written & reviewed
-- [ ] Code `app/streamlit_dashboard.py` written
-- [ ] `tests/test_dashboard.py` written & PASS (CPU, no torch needed)
+- [x] Code `app/streamlit_dashboard.py` written
+- [x] `tests/test_dashboard.py` written & PASS (CPU, no torch needed) — 39 passed
 
 ### Features (per Design §5)
-- [ ] Reads `reports/test_predictions.csv` + `reports/model_summary.csv`
-- [ ] Auto-detects `test_predictions_with_text.csv` if present
+
+- [x] Reads `reports/test_predictions.csv` + `reports/model_summary.csv`
+- [x] Auto-detects `test_predictions_with_text.csv` if present (on Drive/local)
 - [ ] **Comparison Table**: mean_predictor, baseline, bert, distilbert, roberta (if exists)
   - Columns: MAE, RMSE, R², Pearson, Spearman, train_seconds, seconds_per_epoch, params_total, rmse_reduction_vs_baseline_pct
 - [ ] **Charts**:
@@ -25,6 +27,7 @@
 - [ ] **Interactions**: Model select, star filter, sort by error
 
 ### Verification
+
 - [ ] Run local: `cd app && streamlit run streamlit_dashboard.py`
 - [ ] All charts render, no errors
 - [ ] Works with `test_predictions.csv` (no text) AND `test_predictions_with_text.csv`
@@ -35,15 +38,18 @@
 ## 6.2 Error Analysis (E + Leader Cross-check)
 
 ### Preparation
+
 - [ ] Ensure `test_predictions_with_text.csv` exists on Drive/local
 - [ ] Identify **best model** = lowest RMSE on Test (from `model_summary.csv`)
 
 ### Sampling (40 reviews total)
+
 - [ ] **20 Worst-case**: Top 20 `abs_err` of best model on Test
 - [ ] **20 Random stratified**: 4 reviews per star (1-5) × 5 stars = 20, seed=42
 - [ ] Export `error_sample.csv`: `review_id`, `model`, `abs_error`, `true_stars`, `pred`
 
 ### Annotation (E reads 40 reviews, assigns 1 of 5 groups)
+
 | Group | Definition |
 |-------|------------|
 | **Nhãn nhiễu** | Nội dung tích cực (good, great, love...) nhưng sao ≤2; hoặc tiêu cực (bad, terrible...) nhưng sao ≥4 |
@@ -56,11 +62,13 @@
 - [ ] Export `reports/error_analysis.csv`: `review_id,model,abs_error,true_stars,pred,error_group,notes`
 
 ### Leader Cross-check (10% = 4 reviews)
+
 - [ ] Leader independently annotates 4 random reviews from the 40
 - [ ] Agreement ≥ 75% (3/4) → PASS
 - [ ] If < 75%: discuss, re-annotate disputed, repeat
 
 ### Summary for Report
+
 - [ ] Compute % per error group
 - [ ] Write error analysis section in report
 
@@ -69,10 +77,11 @@
 ## 6.3 Report (Leader + All)
 
 ### Structure (per Define Mục 13, Yêu cầu gốc)
+
 - [ ] **Vấn đề & Phạm vi**: Business problem, scope, constraints
 - [ ] **Dữ liệu**: Source, 60k stratified, split 70/15/15, `split_stats.json` summary, limitations (label noise, user/business overlap, no language filter)
 - [ ] **Phương pháp**: Baseline TF-IDF+Ridge, BERT/DistilBERT/RoBERTa + Linear head, Mean pooling, Huber/MSE, training config (3 epochs, batch 16, lr 2e-5, fp16)
-- [ ] **Kết quả**: 
+- [ ] **Kết quả**:
   - Val metrics (Huber vs MSE, loss rule)
   - Test metrics table (MAE, RMSE, R², Pearson, Spearman, per-star, Macro-MAE)
   - Cost: train_seconds, seconds_per_epoch, params_total
@@ -82,6 +91,7 @@
 - [ ] **Nhật ký AI**: Appendix hoặc link `docs/ai_log.md`
 
 ### Writing
+
 - [ ] Leader coordinates, assigns sections
 - [ ] All members contribute their module sections
 - [ ] Leader compiles, edits, formats
@@ -91,7 +101,7 @@
 
 ## 6.4 AI Log Finalization
 
-- [ ] `docs/ai_log.md` complete for all 6 phases
+- [x] `docs/ai_log.md` complete for all 6 phases (entries for Phase 1, 2, 3, 6 exist; Phase 4, 5 chờ training)
 - [ ] Format: Phase, Date, Owner, Prompt, Smoke Test, Run Model, Check Description (per workflow.md §6)
 - [ ] Leader verifies completeness
 
@@ -119,7 +129,7 @@
 
 ## 6.7 AI Log
 
-- [ ] `docs/ai_log.md` updated with Phase 6 entries (E, Leader, All)
+- [x] `docs/ai_log.md` updated with Phase 6 entries (E, Leader, All)
 
 ---
 
@@ -138,5 +148,3 @@
 - All members: _______________ / Date: _______________
 
 ---
-
-> **Project Complete** 🎉
