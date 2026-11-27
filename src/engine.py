@@ -88,6 +88,7 @@ def train_one_epoch(
 ) -> dict:
     """Một epoch huấn luyện; trả về train_loss (trung bình theo mẫu), n_batches, lr."""
     model.train()
+    device = torch.device(device) if not isinstance(device, torch.device) else device
     if fp16 and device.type != "cuda":
         warnings.warn(
             "fp16=True nhưng device không phải CUDA; tự động tắt fp16.",
@@ -161,9 +162,9 @@ def train_one_epoch(
         total_samples += n
         n_batches += 1
         if log_every and step % log_every == 0:
-            elapsed = time.time() - t0
+            elapsed = max(time.time() - t0, 1e-6)
             print(
-                f"  epoch {epoch} step {step}/{n_batches}+ "
+                f"  epoch {epoch} step {step}/{num_batches} "
                 f"loss={loss_value:.4f} ({step / elapsed:.1f} it/s)"
             )
 
@@ -180,7 +181,8 @@ def evaluate(model, loader, device, *, loss_fn=None, fp16=None) -> dict:
         raise ValueError("loader rỗng")
     was_training = model.training
     model.eval()
-    use_fp16 = _resolve_fp16(fp16, torch.device(device) if not isinstance(device, torch.device) else device)
+    device = torch.device(device) if not isinstance(device, torch.device) else device
+    use_fp16 = _resolve_fp16(fp16, device)
     autocast_ctx = (
         torch.autocast(device_type="cuda", dtype=torch.float16)
         if use_fp16
@@ -456,7 +458,7 @@ def fit(
             log_every=log_every, epoch=epoch,
             gradient_accumulation_steps=accum_steps,
         )
-        val = evaluate(model, val_loader, device, loss_fn=loss_fn, fp16=None)
+        val = evaluate(model, val_loader, device, loss_fn=loss_fn, fp16=use_fp16)
         if device.type == "cuda":
             torch.cuda.synchronize()
         epoch_seconds = time.time() - t0
@@ -488,11 +490,12 @@ def fit(
         _save_last(epoch)
 
         if stop_after_epoch is not None and epoch == stop_after_epoch:
+            epoch_seconds_mean = sum(h["epoch_seconds"] for h in history) / len(history)
             return {
                 "run_name": run_name, "status": "running",
                 "epochs_done": len(history), "best_epoch": best_epoch,
                 "best_val_rmse": best_val_rmse, "train_seconds": train_seconds,
-                "epoch_seconds_mean": epoch_seconds,
+                "epoch_seconds_mean": epoch_seconds_mean,
                 "n_params": n_params, "history": pd.DataFrame(history),
                 "checkpoint_dir": str(ckpt_run_dir), "results_dir": str(res_run_dir),
             }

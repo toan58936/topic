@@ -3,8 +3,10 @@
 Spec: docs/define&designt/04_engine_and_utils.md mục 2.7
 """
 
+import contextlib
 import json
 import time
+import unicodedata
 import warnings
 from pathlib import Path
 
@@ -20,16 +22,18 @@ from src.model_builder import BACKBONES, build_model
 from src.utils import get_device, load_checkpoint, write_atomic
 
 
-def _resolve_split_id(run_config: dict, data_dir: str | None = None) -> str | None:
+def _resolve_split_id(run_config: dict | None, data_dir: str | None = None) -> str | None:
     """Đọc split_id từ run_config hoặc split_stats.json trong data_dir."""
     if run_config and run_config.get("split_id"):
         return str(run_config["split_id"])
-    if data_dir:
-        stats_path = Path(data_dir) / "split_stats.json"
+    effective_dir = data_dir or (run_config.get("data_dir") if run_config else None)
+    if effective_dir:
+        stats_path = Path(effective_dir) / "split_stats.json"
         if stats_path.exists():
             try:
                 stats = json.loads(stats_path.read_text(encoding="utf-8"))
-                return stats.get("split_id")
+                split_id = stats.get("split_id")
+                return str(split_id) if split_id is not None else None
             except Exception:
                 return None
     return None
@@ -49,7 +53,6 @@ def _count_tokens_bert(texts: list[str]) -> list[int]:
 
 
 def _autocast_ctx(use_fp16: bool):
-    import contextlib
     if use_fp16:
         return torch.autocast(device_type="cuda", dtype=torch.float16)
     return contextlib.nullcontext()
@@ -68,9 +71,18 @@ def _resolve_fp16(fp16, device: torch.device):
     return bool(fp16)
 
 
+def _normalize_inference_text(text: str, lowercase: bool = True) -> str:
+    """Làm sạch nhiễu và đồng bộ chuẩn hóa NFC/chữ thường với dữ liệu huấn luyện."""
+    cleaned = clean_noise(text)
+    if lowercase:
+        cleaned = cleaned.lower()
+    normalized = unicodedata.normalize("NFC", cleaned.strip())
+    return " ".join(normalized.split())
+
+
 def predict(
     texts, model, tokenizer, *, device=None, max_length=256, batch_size=32,
-    fp16=None, clip=True, truncation_strategy="tail",
+    fp16=None, clip=True, truncation_strategy="tail", lowercase=True,
 ):
     """Dự đoán điểm cho một chuỗi (-> float) hoặc danh sách chuỗi (-> ndarray)."""
     single = isinstance(texts, str)
@@ -85,7 +97,9 @@ def predict(
     if batch_size < 1:
         raise ValueError(f"batch_size phải >= 1, nhận: {batch_size}")
     if truncation_strategy not in ("tail", "head_tail"):
-        raise ValueError(f"truncation_strategy phải thuộc {{tail, head_tail}}, nhận: {truncation_strategy!r}")
+        raise ValueError(
+            f"truncation_strategy phải thuộc {{tail, head_tail}}, nhận: {truncation_strategy!r}"
+        )
 
     device = _resolve_device(device)
     use_fp16 = _resolve_fp16(fp16, device)
@@ -97,7 +111,10 @@ def predict(
     try:
         with torch.no_grad(), _autocast_ctx(use_fp16):
             for i in range(0, len(texts), batch_size):
-                batch_texts = [clean_noise(t) for t in texts[i : i + batch_size]]
+                batch_texts = [
+                    _normalize_inference_text(t, lowercase=lowercase)
+                    for t in texts[i : i + batch_size]
+                ]
                 if truncation_strategy == "head_tail":
                     enc = tokenizer(
                         batch_texts,
@@ -113,7 +130,10 @@ def predict(
                         keep = attention_mask[j].bool()
                         unpadded.append((input_ids[j][keep], attention_mask[j][keep]))
 
-                    target_len = min(max(int(ids.shape[0]) for ids, _ in unpadded), max_length)
+                    target_len = min(
+                        max(int(ids.shape[0]) for ids, _ in unpadded),
+                        max_length,
+                    )
                     new_input_ids = []
                     new_attention_mask = []
                     for sample_ids, sample_mask in unpadded:
@@ -149,7 +169,7 @@ def predict(
 
     arr = np.concatenate(preds) if preds else np.array([])
     if clip:
-        arr = np.clip(arr, 1.0, 5.0)
+        arr = metrics.clip_scores(arr)
     return float(arr[0]) if single else arr
 
 
@@ -164,6 +184,11 @@ def load_trained_model(checkpoint_path, device=None, *, backbone_config=None):
         raise ValueError(f"Checkpoint {checkpoint_path} thiếu model_state_dict")
 
     backbone = run_config.get("backbone")
+    if backbone not in BACKBONES:
+        raise ValueError(
+            f"Checkpoint {checkpoint_path} chứa backbone không hợp lệ: {backbone!r}. "
+            f"Tên hợp lệ: {sorted(BACKBONES)}"
+        )
     pooling = run_config.get("pooling", "mean")
     dropout = run_config.get("dropout", 0.1)
 
@@ -212,20 +237,23 @@ def export_test_predictions(
         raise FileExistsError(f"Đã tồn tại {csv_path}; dùng overwrite=True để ghi đè")
 
     device = _resolve_device(device)
+    use_fp16 = _resolve_fp16(fp16, device)
     model.to(device)
     t0 = time.time()
-    result = evaluate(model, test_loader, device, fp16=fp16)
+    result = evaluate(model, test_loader, device, fp16=use_fp16)
     if device.type == "cuda":
         torch.cuda.synchronize()
     inference_seconds = time.time() - t0
 
-    split_id = _resolve_split_id(run_config, data_dir)
+    effective_cfg = run_config or (run_info or {}).get("run_config")
+    effective_data_dir = data_dir or (effective_cfg or {}).get("data_dir")
+    split_id = _resolve_split_id(effective_cfg, effective_data_dir)
 
     df = pd.DataFrame({
         "review_id": result["review_id"],
         "true_stars": result["y_true"].astype(int),
         "pred_raw": result["y_pred_raw"],
-        "pred": np.clip(result["y_pred_raw"], 1.0, 5.0),
+        "pred": metrics.clip_scores(result["y_pred_raw"]),
         "split_id": split_id,
     })
     write_atomic(str(csv_path), lambda p: df.to_csv(p, index=False))
@@ -237,7 +265,7 @@ def export_test_predictions(
         "n": len(df),
         "rmse_raw": metrics.rmse(result["y_true"], result["y_pred_raw"], clip=False),
         "inference_seconds": inference_seconds,
-        "fp16": _resolve_fp16(fp16, device) if fp16 is not None else device.type == "cuda",
+        "fp16": use_fp16,
         "device": str(device),
         "split_id": split_id,
     }
@@ -249,7 +277,7 @@ def export_test_predictions(
 
 
 def _read_pred_csv(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, dtype={"review_id": str, "split_id": str})
     for col in ("review_id", "true_stars", "pred_raw", "pred", "split_id"):
         if col not in df.columns:
             raise ValueError(f"{path} thiếu cột {col!r}")
@@ -283,16 +311,18 @@ def merge_test_predictions(
             raise ValueError(f"{name}_test.csv có true_stars không khớp")
         if "split_id" in df.columns:
             split_id_val = df["split_id"].iloc[0]
-            if split_id_val != ref_split_id:
+            if (pd.notna(split_id_val) or pd.notna(ref_split_id)) and str(split_id_val) != str(ref_split_id):
                 raise ValueError(f"{name}_test.csv có split_id không khớp: {split_id_val} != {ref_split_id}")
 
     out = pd.DataFrame({"review_id": ref_ids, "true_stars": np.asarray(ref_true, dtype=np.int64)})
 
     if baseline_preds is not None:
         if isinstance(baseline_preds, (str, Path)):
-            base = pd.read_csv(baseline_preds)
+            base = pd.read_csv(baseline_preds, dtype={"review_id": str})
         else:
-            base = baseline_preds
+            base = baseline_preds.copy()
+            if "review_id" in base.columns:
+                base["review_id"] = base["review_id"].astype(str)
         for col in ("review_id", "pred_baseline"):
             if col not in base.columns:
                 raise ValueError(f"baseline_preds thiếu cột {col!r}")
@@ -326,6 +356,7 @@ def merge_test_predictions(
 
     # Thêm n_tokens (tokenizer BERT, không cắt) và split_id
     test_df = pd.read_parquet(test_parquet, columns=["review_id", "text"])
+    test_df["review_id"] = test_df["review_id"].astype(str)
     text_map = dict(zip(test_df["review_id"], test_df["text"]))
     missing = [r for r in out["review_id"] if r not in text_map]
     if missing:

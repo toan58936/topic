@@ -1,9 +1,9 @@
 """Automated error analysis workflow for Yelp star-prediction outputs.
 
 Commands:
-    python -m scripts.error_analysis auto --reports-dir data
-    python -m scripts.error_analysis prepare --reports-dir data
-    python -m scripts.error_analysis summarize --reports-dir data
+    python -m scripts.error_analysis auto --reports-dir reports --overwrite
+    python -m scripts.error_analysis prepare --reports-dir reports --overwrite
+    python -m scripts.error_analysis summarize --reports-dir reports
 """
 import argparse
 import json
@@ -25,34 +25,107 @@ OUTPUT_COLUMNS = ["review_id", "model", "abs_error", "true_stars", "pred", "erro
 POS_WORDS = {
     "amazing", "excellent", "fantastic", "wonderful", "awesome", "delicious",
     "perfect", "best", "love", "loved", "great", "friendly", "fresh", "superb",
+    "good", "nice", "helpful", "splendid", "happy", "glad", "phenomenal",
+    "fabulous", "tremendous", "recommend", "fun", "enjoy", "enjoyed", "clean",
+    "prompt", "courteously", "attentive", "sweetest", "hospitable", "thrilled",
+    "unparalleled", "flavorful", "moist", "crisp", "honest", "tasty", "hopeful",
+    "smooth", "praise", "compliment", "pleasant", "appreciated", "fast",
 }
+
 NEG_WORDS = {
     "terrible", "horrible", "worst", "awful", "disgusting", "rude", "slow",
-    "cold", "inedible", "overpriced", "waste", "disappointed", "disappointing",
+    "slowly", "cold", "inedible", "overpriced", "waste", "wasted", "disappointed",
+    "disappointing", "bad", "badly", "poor", "broken", "stupid", "uncomfortable",
+    "unprofessional", "miserable", "subpar", "flavorless", "smokey", "crowded",
+    "neglect", "ridiculous", "dumbest", "shoddy", "damage", "filthy", "nasty",
+    "wrong", "complaint", "avoid", "ignore", "ignored", "ignoring", "issues",
+    "issue", "problem", "problems", "ditzy", "dead", "waited", "waiting",
+    "flat", "lopsided", "shaking", "phobia", "painfully", "weird", "upsell",
+    "dry", "drawback", "unhappy", "shocked", "sucked", "confused",
+    "refused", "slammed", "yelled", "flustered", "stripped", "broke", "offended",
+    "condemned", "reeked", "foul", "average", "overwhelmed", "minimal",
 }
+
+SEVERE_NEG_WORDS = {
+    "terrible", "horrible", "worst", "awful", "disgusting", "dead", "ditzy",
+    "wrong", "miserable", "shoddy", "filthy", "nasty", "broken", "stupid",
+    "unprofessional", "rude", "inedible", "sucked",
+}
+
+PROFANITY_WORDS = {
+    "fuck", "fucking", "shit", "shitload", "bitch", "bitches", "hoe", "asshole", "damn", "crap",
+}
+
+# Thành ngữ làm đảo ngược hoặc trung hòa nghĩa của từ đơn lẻ
+IDIOM_MASKS = [
+    r"\bcan'?t\s+wait\b",
+    r"\bat\s+best\b",
+    r"\bcold\s+ones?\b",
+    r"\bnot\s+(?:happy|great|good|nice|friendly|helpful)\b",
+    r"\bgood\s+thing\b",
+]
+
+NEG_PHRASES = [
+    r"\bno responses?\b", r"\bno call back\b", r"\bnever returned\b",
+    r"\bnot happy\b", r"\bnot great\b", r"\bno apology\b", r"\bno inside seating\b",
+    r"\bover-?priced\b", r"\bso so\b", r"\bfall short\b", r"\bdon'?t care\b",
+    r"\bjust wished\b", r"\bonly thing\b", r"\bonly drawback\b", r"\blong wait\b",
+    r"\bwrong address\b", r"\btook me forever\b", r"\bwaited on hold\b",
+    r"\bstand and wait\b", r"\bwatered down\b", r"\bnot what we expected\b",
+    r"\bnot crispy\b", r"\bice cold\b", r"\bbait and switch\b", r"\bturn me off\b",
+    r"\bwrong dessert\b", r"\btoo small\b", r"\bnot a cheap\b",
+    r"\bnone of the prices\b", r"\bdead to the world\b",
+]
+
 CONTRAST_WORDS = {
-    "but", "however", "although", "though", "unfortunately", "except", "yet",
+    "but", "however", "although", "though", "unfortunately", "except", "yet", "nonetheless", "granted",
 }
+
+UPDATE_PATTERNS = [
+    r"\bupdate\b",
+    r"\brevised\s+(?:review|my\s+rating)\b",
+    r"\boriginal\s+review\b",
+    r"\bedit\s*:",
+    r"\bprevious\s+review\b",
+]
+
 SARCASM_PATTERNS = [
     r"\byeah right\b",
     r"\bgreat job\b.*(!|\.{3})",
     r"\bthanks for nothing\b",
     r"\bjust great\b",
     r"\bwhat a joke\b",
-    r"\bsure\b.*\bwait(ed|ing)?\b",
-    r"\"(great|amazing|wonderful|fresh|fast)\"",
+    r"\bgot exactly (?:our|my) money'?s worth\b",
+    r"\bif you (?:like|love) .{3,120}? this is the (?:place|gym|spot) for you\b",
+    r"\bif you could eat .{2,40}?(?:rate|give) it 5\b",
+    r"\bstep up from a (?:school )?cafeteria\b",
+    r"\bwould be a great place for a restaurant\b",
+    r"\bsaid everything was perfect\b",
+    r"\bperfect visit 1x\b",
+    r"\"(?:great|amazing|wonderful|fresh|fast|gym|trainers)\"",
 ]
 
 
-def classify_review(row: pd.Series) -> tuple[str, str]:
-    """Automatically assign one of the 5 error groups and generate evidence notes."""
-    text = str(row["text"])
-    text_low = text.lower()
-    words = set(re.findall(r"\b[a-z]+\b", text_low))
-
+def _extract_cues(text_low: str) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str]]:
+    neg_phrase_hits = [p for p in NEG_PHRASES if re.search(p, text_low)]
+    cleaned = text_low
+    for pat in IDIOM_MASKS:
+        cleaned = re.sub(pat, " ", cleaned)
+    words = set(re.findall(r"\b[a-z]+\b", cleaned))
     pos_hits = sorted(words & POS_WORDS)
-    neg_hits = sorted(words & NEG_WORDS)
-    has_contrast = bool(words & CONTRAST_WORDS)
+    neg_hits = sorted((words & NEG_WORDS) | (words & PROFANITY_WORDS))
+    severe_neg_hits = sorted((words & SEVERE_NEG_WORDS) | (words & PROFANITY_WORDS))
+    profanity_hits = sorted(words & PROFANITY_WORDS)
+    contrast_hits = sorted(words & CONTRAST_WORDS)
+    return pos_hits, neg_hits, severe_neg_hits, profanity_hits, neg_phrase_hits, contrast_hits
+
+
+def classify_review(row: pd.Series) -> tuple[str, str]:
+    """Automatically assign one of the 5 error groups with grounded evidence notes."""
+    text_low = str(row["text"]).lower()
+    pos_hits, neg_hits, severe_neg_hits, profanity_hits, neg_phrase_hits, contrast_hits = _extract_cues(text_low)
+
+    has_update = any(re.search(pat, text_low) for pat in UPDATE_PATTERNS)
     has_sarcasm = any(re.search(pat, text_low) for pat in SARCASM_PATTERNS)
 
     true_s = int(row["true_stars"])
@@ -60,42 +133,82 @@ def classify_review(row: pd.Series) -> tuple[str, str]:
     abs_err = float(row["abs_error"])
     n_tok = int(row["n_tokens"])
 
-    # 1. Bị cắt 256 token (chỉ hợp lệ khi n_tokens > 254)
-    if n_tok > 254 and abs_err >= 1.0:
+    neg_count = len(neg_hits) + len(neg_phrase_hits)
+    pos_count = len(pos_hits)
+
+    # Kiểm tra đảo chiều cảm xúc giữa phần đầu và phần đuôi văn bản dài (>254 token)
+    tokens_rough = text_low.split()
+    head_text = " ".join(tokens_rough[:180])
+    tail_text = " ".join(tokens_rough[180:])
+    h_pos, h_neg, _, _, h_nphr, _ = _extract_cues(head_text)
+    t_pos, t_neg, _, _, t_nphr, _ = _extract_cues(tail_text)
+    tail_has_update = any(re.search(pat, tail_text) for pat in UPDATE_PATTERNS)
+    head_polarity = len(h_pos) - (len(h_neg) + len(h_nphr))
+    tail_polarity = len(t_pos) - (len(t_neg) + len(t_nphr))
+    polarity_flip = (head_polarity * tail_polarity < 0) or (abs(head_polarity - tail_polarity) >= 3)
+
+    # 1. Bị cắt 256 token (ưu tiên khi có đoạn cập nhật/sửa điểm ở cuối bài)
+    if n_tok > 254 and abs_err >= 1.5 and (has_update or tail_has_update):
         return (
             "Bị cắt 256 token",
-            f"Văn bản dài {n_tok} token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số {abs_err:.2f}.",
+            f"Văn bản dài {n_tok} token (>254) có đoạn cập nhật/sửa điểm (update/revised) ở cuối bị cắt mất, "
+            f"khiến mô hình dự đoán {pred_s:.2f} so với thật {true_s}.",
         )
 
-    # 2. Mỉa mai
-    if has_sarcasm or (true_s <= 2 and pred_s >= 3.8 and len(pos_hits) >= 2 and not neg_hits):
-        evidence = ", ".join(pos_hits[:3]) if pos_hits else "mẫu câu châm biếm"
+    # 2. Mỉa mai (châm biếm / giả định ngược ngữ cảnh)
+    if has_sarcasm and abs_err >= 1.5:
         return (
             "Mỉa mai",
-            f"Biểu hiện mỉa mai/từ tích cực ngược ngữ cảnh ({evidence}) khiến mô hình dự đoán {pred_s:.2f} sao.",
+            f"Chứa cấu trúc châm biếm/giả định ngược ngữ cảnh khiến mô hình chấm lệch "
+            f"(dự đoán {pred_s:.2f} vs thật {true_s}).",
         )
 
-    # 3. Nhãn nhiễu
-    if (true_s == 1 and len(pos_hits) >= 2 and not neg_hits and not has_contrast) or (
-        true_s == 5 and len(neg_hits) >= 2 and not pos_hits and not has_contrast
-    ):
-        evidence = ", ".join((pos_hits or neg_hits)[:3])
+    # 3. Bị cắt 256 token (đảo chiều cảm xúc ở văn bản dài >300 token)
+    if n_tok > 300 and abs_err >= 1.5 and polarity_flip:
         return (
-            "Nhãn nhiễu",
-            f"Nhãn {true_s} sao mâu thuẫn trực tiếp với từ ngữ cảm xúc rõ ràng trong bài ({evidence}).",
+            "Bị cắt 256 token",
+            f"Văn bản dài {n_tok} token (>254) có cảm xúc đảo chiều ở phần cuối bị cắt mất, "
+            f"khiến mô hình dự đoán {pred_s:.2f} so với thật {true_s}.",
         )
 
-    # 4. Cảm xúc lẫn lộn
-    if (pos_hits and neg_hits) or (has_contrast and (len(pos_hits) + len(neg_hits) >= 1)):
+    # 4. Nhãn nhiễu (nhãn sao đối nghịch trực tiếp với cực cảm xúc một chiều)
+    if abs_err >= 2.0:
+        strong_neg_evidence = profanity_hits or severe_neg_hits or neg_phrase_hits
+        if true_s >= 4 and pred_s <= 2.0 and strong_neg_evidence and pos_count == 0:
+            keyword_cues = (profanity_hits or severe_neg_hits)[:3]
+            cue_detail = f" ({', '.join(keyword_cues)})" if keyword_cues else ""
+            return (
+                "Nhãn nhiễu",
+                f"Nội dung phản ánh tiêu cực/báo lỗi{cue_detail}, không có lời khen nhưng nhãn ghi {true_s} sao "
+                f"(mô hình dự đoán {pred_s:.2f}).",
+            )
+        if true_s <= 2 and pred_s >= 4.0 and pos_count >= 2 and neg_count == 0:
+            return (
+                "Nhãn nhiễu",
+                f"Nội dung tích cực ({', '.join(pos_hits[:3])}), không có lời chê nhưng nhãn ghi {true_s} sao "
+                f"(mô hình dự đoán {pred_s:.2f}).",
+            )
+
+    # 5. Cảm xúc lẫn lộn (thực sự có đồng thời tín hiệu khen và chê)
+    if pos_count >= 1 and neg_count >= 1 and (contrast_hits or abs_err >= 0.5 or (2 <= true_s <= 4)):
+        pos_str = ", ".join(pos_hits[:2])
+        neg_str = ", ".join(neg_hits[:2]) if neg_hits else "ý chê/hạn chế"
         return (
             "Cảm xúc lẫn lộn",
-            f"Review pha trộn khen ({pos_hits[:2]}) và chê ({neg_hits[:2]}) kèm từ nối tương phản.",
+            f"Review vừa có yếu tố khen ({pos_str}) vừa có yếu tố chê ({neg_str}), tạo sắc thái hai chiều.",
         )
 
-    # 5. Khác
+    # 6. Khác (tách rõ dự đoán sát nhãn trên nhóm random vs ngữ cảnh đặc thù)
+    if abs_err < 0.5:
+        return (
+            "Khác",
+            f"Mô hình dự đoán sát nhãn thật (dự đoán {pred_s:.2f} vs thật {true_s}, sai số {abs_err:.2f}); "
+            "không phát sinh lỗi đáng kể.",
+        )
     return (
         "Khác",
-        f"Review ngắn/trung tính ({n_tok} token) hoặc sắc thái mơ hồ; dự đoán {pred_s:.2f} so với thật {true_s}.",
+        f"Ngữ cảnh đặc thù/ngắn ({n_tok} token) hoặc đối tượng cảm xúc gián tiếp "
+        f"(dự đoán {pred_s:.2f} vs thật {true_s}, sai số {abs_err:.2f}).",
     )
 
 
@@ -173,7 +286,7 @@ def validate_annotations(annotations: pd.DataFrame, sample: pd.DataFrame) -> pd.
     return result[OUTPUT_COLUMNS]
 
 
-def prepare(reports_dir: str = "data", output_dir: str | None = None, overwrite: bool = False) -> Path:
+def prepare(reports_dir: str, output_dir: str | None = None, overwrite: bool = False) -> Path:
     summary, preds = load_data(reports_dir)
     sample = sample_reviews(summary, preds)
     output = Path(output_dir or reports_dir)
@@ -197,7 +310,7 @@ def prepare(reports_dir: str = "data", output_dir: str | None = None, overwrite:
 
     manifest = {
         "status": "auto_annotated",
-        "mode": "automated_rule_based",
+        "mode": "automated_rule_based_v2",
         "model": str(sample.model.iloc[0]),
         "split_id": str(preds.split_id.iloc[0]),
         "seed": 42,
@@ -210,7 +323,7 @@ def prepare(reports_dir: str = "data", output_dir: str | None = None, overwrite:
     return output
 
 
-def summarize(reports_dir: str = "data", output_dir: str | None = None) -> Path:
+def summarize(reports_dir: str, output_dir: str | None = None) -> Path:
     summary, preds = load_data(reports_dir)
     sample = sample_reviews(summary, preds)
     output = Path(output_dir or reports_dir)
@@ -245,7 +358,8 @@ def summarize(reports_dir: str = "data", output_dir: str | None = None) -> Path:
         "",
         f"Mô hình: **{sample.model.iloc[0]}**, chọn theo RMSE Test thấp nhất trong `model_summary.csv`.",
         f"Split: `{preds.split_id.iloc[0]}`. 20 ca sai lớn nhất + 20 ca ngẫu nhiên phân tầng (4/sao), `seed=42`, không trùng review.",
-        "Phương pháp gán nhãn: **Tự động hóa (Rule-based NLP Heuristic)** dựa trên độ dài token, từ khóa cảm xúc và cấu trúc tương phản.",
+        "Phương pháp gán nhãn: **Tự động hóa (Rule-based NLP Heuristic v2)** xét đảo chiều đầu–đuôi/đoạn cập nhật, "
+        "cấu trúc mỉa mai, cực cảm xúc một chiều và thành ngữ đảo nghĩa.",
         "",
         "| Nhóm | Số review | % mẫu 40 | Worst (20) | Random (20) |",
         "|---|---:|---:|---:|---:|",
@@ -282,7 +396,7 @@ def summarize(reports_dir: str = "data", output_dir: str | None = None) -> Path:
     return path
 
 
-def run_auto(reports_dir: str = "data", output_dir: str | None = None, overwrite: bool = False) -> Path:
+def run_auto(reports_dir: str, output_dir: str | None = None, overwrite: bool = False) -> Path:
     prepare(reports_dir, output_dir, overwrite=overwrite)
     return summarize(reports_dir, output_dir)
 
@@ -290,7 +404,7 @@ def run_auto(reports_dir: str = "data", output_dir: str | None = None, overwrite
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["auto", "prepare", "summarize"])
-    parser.add_argument("--reports-dir", default="data")
+    parser.add_argument("--reports-dir", default="reports")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--overwrite", action="store_true", help="Ghi đè kết quả phân tích lỗi cũ nếu có")
     args = parser.parse_args()
