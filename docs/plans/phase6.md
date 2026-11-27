@@ -4,7 +4,7 @@
 
 ---
 
-## 6.1 Dashboard (E)
+## 6.1 Dashboard (E) — **CODE COMPLETE, FEATURES PENDING**
 
 ### Development
 
@@ -35,12 +35,12 @@
 
 ---
 
-## 6.2 Error Analysis (E + Leader Cross-check)
+## 6.2 Error Analysis (E + Leader Cross-check) — **PENDING**
 
 ### Preparation
 
 - [ ] Ensure `test_predictions_with_text.csv` exists on Drive/local
-- [ ] Identify **best model** = lowest RMSE on Test (from `model_summary.csv`)
+- [x] Identify **best model** = lowest RMSE on Test (from `model_summary.csv`) → **RoBERTa** (RMSE=0.5240)
 
 ### Sampling (40 reviews total)
 
@@ -74,7 +74,7 @@
 
 ---
 
-## 6.3 Report (Leader + All)
+## 6.3 Report (Leader + All) — **PENDING**
 
 ### Structure (per Define Mục 13, Yêu cầu gốc)
 
@@ -99,15 +99,16 @@
 
 ---
 
-## 6.4 AI Log Finalization
+## 6.4 AI Log Finalization — **PARTIAL**
 
-- [x] `docs/ai_log.md` complete for all 6 phases (entries for Phase 1, 2, 3, 6 exist; Phase 4, 5 chờ training)
+- [x] `docs/ai_log.md` complete for Phase 1, 2, 3 (entries exist)
+- [ ] `docs/ai_log.md` entries for Phase 4, 5, 6 to be added
 - [ ] Format: Phase, Date, Owner, Prompt, Smoke Test, Run Model, Check Description (per workflow.md §6)
 - [ ] Leader verifies completeness
 
 ---
 
-## 6.5 Demo Preparation
+## 6.5 Demo Preparation — **PENDING**
 
 - [ ] Dashboard running on presenter machine
 - [ ] `test_predictions_with_text.csv` available locally (for detail view)
@@ -116,9 +117,9 @@
 
 ---
 
-## 6.6 Deliverables
+## 6.6 Deliverables — **PENDING**
 
-- [ ] `app/streamlit_dashboard.py` + tests committed
+- [x] `app/streamlit_dashboard.py` + tests committed
 - [ ] Dashboard runs locally, reads `reports/` CSVs
 - [ ] `reports/error_analysis.csv` (40 reviews, 5 groups)
 - [ ] Report PDF
@@ -129,7 +130,7 @@
 
 ## 6.7 AI Log
 
-- [x] `docs/ai_log.md` updated with Phase 6 entries (E, Leader, All)
+- [ ] `docs/ai_log.md` updated with Phase 6 entries (E, Leader, All)
 
 ---
 

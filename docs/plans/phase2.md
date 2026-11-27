@@ -8,7 +8,7 @@
 
 ### Model Builder (C)
 - [x] Spec `docs/03_model.md` written
-- [ ] Spec reviewed by Leader
+- [x] Spec reviewed by Leader
 - [x] Code `src/model_builder.py` written:
   - [x] `BACKBONES` dict: bert, roberta, distilbert with hf_name, model_type, drop_pooler
   - [x] `build_model(backbone, pooling, dropout, pretrained, backbone_config, output_bias_init)`
@@ -22,7 +22,7 @@
 
 ### Training Infra (D)
 - [x] Spec `docs/04_engine_and_utils.md` written
-- [ ] Spec reviewed by Leader
+- [x] Spec reviewed by Leader
 - [x] Code `src/utils.py`: `set_seed`, checkpoint save/load (weights_only=True)
 - [x] Code `src/engine.py`:
   - [x] `train_epoch(model, loader, optimizer, scheduler, loss_fn, fp16, grad_clip)` → `train_one_epoch`
@@ -33,7 +33,7 @@
   - [x] History CSV per run (`history.csv` + `run_meta.json`)
 - [x] Code `src/train.py`: CLI config, `set_seed` before `build_model`, log run_meta
 - [x] Code `src/predict.py`: load weights (build_model pretrained=False + state_dict), predict, clip, export test_predictions.csv, merge validation
-  - [ ] Hàm `main()` cho `python -m src.predict` (chưa có, phase5 cần)
+- [x] Hàm `main()` cho `python -m src.predict` implemented
 
 ---
 
@@ -46,7 +46,7 @@
   - [x] CLS pooling: position 0
   - [x] Head bias init = mean train label (when provided)
   - [x] Param count: backbone + head (no pooler)
-  - [ ] Tokenizer correct for each backbone (cần mạng — slow test)
+  - [x] Tokenizer correct for each backbone
 
 - [x] `tests/test_utils.py` written & PASS (4/4)
   - [x] `set_seed` reproducible
@@ -70,17 +70,17 @@
 
 ---
 
-## 2.3 Verification (Kaggle GPU)
+## 2.3 Verification (Kaggle GPU) — **COMPLETED**
 
-- [ ] Kaggle: `git clone`, `pip install -r requirements.txt` (< 10 min)
-- [ ] Smoke test: 8 samples, 1 epoch, batch=16, fp16, BERT Huber
-  - [ ] No errors
-  - [ ] Loss valid (not NaN)
-  - [ ] Checkpoint saved to `/kaggle/working/checkpoints/`
-- [ ] Short GPU run: 100 steps (or 1 epoch), measure `seconds_per_epoch`, VRAM
-  - [ ] `seconds_per_epoch` recorded for Milestone 1
-  - [ ] VRAM < 14GB (T4 16GB)
-  - [ ] No OOM
+- [x] Kaggle: `git clone`, `pip install -r requirements.txt` (< 10 min)
+- [x] Smoke test: 8 samples, 1 epoch, batch=16, fp16, BERT Huber
+  - [x] No errors
+  - [x] Loss valid (not NaN)
+  - [x] Checkpoint saved to `/kaggle/working/checkpoints/`
+- [x] Short GPU run: 100 steps (or 1 epoch), measure `seconds_per_epoch`, VRAM
+  - [x] `seconds_per_epoch` recorded for Milestone 1 (~595s BERT, ~350s DistilBERT, ~680s RoBERTa)
+  - [x] VRAM < 14GB (T4 16GB)
+  - [x] No OOM
 
 ---
 
@@ -88,9 +88,9 @@
 
 - [x] `model_builder.py`, `utils.py`, `engine.py`, `train.py`, `predict.py` + tests committed
 - [x] All pytest CPU PASS (60/60 not slow)
-- [ ] Smoke test PASS (Kaggle)
-- [ ] Short GPU run PASS, `seconds_per_epoch` recorded
-- [ ] PRs merged to `develop`
+- [x] Smoke test PASS (Kaggle)
+- [x] Short GPU run PASS, `seconds_per_epoch` recorded
+- [x] PRs merged to `develop`
 
 ---
 
@@ -105,9 +105,9 @@
 **PASS Criteria** (Leader approve):
 - [x] All 5 test files PASS (CPU)
 - [x] 3 backbones build with tiny config
-- [ ] Smoke test + short GPU run PASS
-- [ ] `seconds_per_epoch` recorded
-- [ ] Code merged to `develop`
+- [x] Smoke test + short GPU run PASS
+- [x] `seconds_per_epoch` recorded
+- [x] Code merged to `develop`
 
 **Sign-off**:
 - Owner C: _______________ / Date: _______________

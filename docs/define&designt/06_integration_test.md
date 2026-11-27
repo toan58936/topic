@@ -338,7 +338,7 @@ def reconcile_metrics(data, tolerance):
 | Sau Tuần 2, pull kết quả từ Drive về `reports/` | Leader / F | `git pull` + copy từ Drive |
 | Chạy validation cục bộ | F | `python -m scripts.validate_outputs --results-dir reports/` |
 | Commit `reports/` nếu PASS | Leader | `git add reports/ && git commit -m "Week 2 results"` |
-| CI/CD (tuỳ chọn) | GitHub Actions | `pytest tests/test_integration.py` trên artifact |
+| Chạy integration test cục bộ | F | `pytest tests/test_integration.py` |
 
 ### 2.7. Quyết định thiết kế và điểm mở
 

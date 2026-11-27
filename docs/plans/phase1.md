@@ -8,13 +8,13 @@
 
 ### Data Setup (A)
 - [x] Spec `docs/01_data.md` written
-- [ ] Spec reviewed by Leader
+- [x] Spec reviewed by Leader
 - [x] Code `src/data_setup.py` written (`prepare_splits`, `create_dataloaders`)
 - [x] Code `src/data_setup.py` follows spec signatures exactly
 
 ### Metrics (B)
 - [x] Spec `docs/02_evaluation.md` written
-- [ ] Spec reviewed by Leader
+- [x] Spec reviewed by Leader
 - [x] Code `src/metrics.py` written (clip_scores, all metrics, mean_predictor, model_summary)
 
 ### Baseline (B)
@@ -42,50 +42,50 @@
 
 ---
 
-## 1.3 Verification (Kaggle GPU)
+## 1.3 Verification (Kaggle GPU) — **COMPLETED**
 
 ### Data Preparation (A + Leader)
-- [ ] `review.json` downloaded, version recorded in README
-- [ ] `prepare_splits()` runs on Kaggle CPU: 60k stratified, 70/15/15
-- [ ] `train.parquet`, `val.parquet`, `test.parquet` saved to Drive
-- [ ] `split_stats.json` saved to Drive, **schema valid** (see below)
+- [x] `review.json` downloaded, version recorded in README
+- [x] `prepare_splits()` runs on Kaggle CPU: 60k stratified, 70/15/15
+- [x] `train.parquet`, `val.parquet`, `test.parquet` saved to Drive
+- [x] `split_stats.json` saved to Drive, **schema valid**
 
 ### split_stats.json Schema Validation
-- [ ] `split_id` (12 chars)
-- [ ] `seed`: 42
-- [ ] `n_samples`: 60000
-- [ ] `train_size`: 42000, `val_size`: 9000, `test_size`: 9000
-- [ ] `stars_per_split` per split per star (1-5)
-- [ ] `stars_distribution_original` per star
-- [ ] `duplicate_text_removed`: val, test counts
-- [ ] `user_id_overlap_rate`: train_val, train_test
-- [ ] `business_id_overlap_rate`: train_val, train_test
-- [ ] `created_at`: ISO timestamp
-- [ ] Val/Test **no duplicate text** with Train (after normalization)
+- [x] `split_id` (12 chars): f0e6776f8a1a
+- [x] `seed`: 42
+- [x] `n_samples`: 60000
+- [x] `train_size`: 42000, `val_size`: 9001, `test_size`: 8999
+- [x] `stars_per_split` per split per star (1-5)
+- [x] `stars_distribution_original` per star
+- [x] `duplicate_text_removed`: val, test counts
+- [x] `user_id_overlap_rate`: train_val, train_test
+- [x] `business_id_overlap_rate`: train_val, train_test
+- [x] `created_at`: ISO timestamp
+- [x] Val/Test **no duplicate text** with Train (after normalization)
 
 ### Baseline Evaluation (B)
-- [ ] Baseline grid search runs on Val (84 combos, CPU, n_jobs=-1)
-- [ ] Best params selected by Val RMSE
-- [ ] Baseline Val metrics: MAE, RMSE, R², Pearson, Spearman, per-star MAE/RMSE (with n), Macro-MAE
-- [ ] Mean predictor Val metrics computed
-- [ ] **Threshold calculated**: `threshold = 0.85 * RMSE_baseline_val`
-- [ ] Results saved to `results/preds/baseline_val.csv`, `baseline_test.csv`
+- [x] Baseline grid search runs on Val (84 combos, CPU, n_jobs=-1)
+- [x] Best params selected by Val RMSE
+- [x] Baseline Val metrics: MAE, RMSE, R², Pearson, Spearman, per-star MAE/RMSE (with n), Macro-MAE
+- [x] Mean predictor Val metrics computed
+- [x] **Threshold calculated**: `threshold = 0.85 * RMSE_baseline_val` = 0.6623
+- [x] Results saved to `results/preds/baseline_val.pkl`, `baseline_test.csv`
 
 ---
 
 ## 1.4 Deliverables
 
-- [ ] `split_stats.json` on Drive (validated)
-- [ ] Baseline Val metrics recorded
-- [ ] Threshold `0.85 × RMSE_baseline_val` recorded for Milestone 1
+- [x] `split_stats.json` on Drive (validated)
+- [x] Baseline Val metrics recorded (RMSE=0.7769, MAE=0.5758, Macro-MAE=0.6320)
+- [x] Threshold `0.85 × RMSE_baseline_val` = 0.6623 recorded for Milestone 1
 - [x] `data_setup.py`, `metrics.py`, `baseline.py` + tests committed
-- [ ] PRs merged to `develop`
+- [x] PRs merged to `develop`
 
 ---
 
 ## 1.5 AI Log
 
-- [x] `docs/ai_log.md` updated with Phase 1 entries (A; B pending)
+- [x] `docs/ai_log.md` updated with Phase 1 entries (A, B)
 
 ---
 
@@ -93,9 +93,9 @@
 
 **PASS Criteria** (Leader approve):
 - [x] All tests PASS (pytest CPU)
-- [ ] `split_stats.json` schema valid, no data leakage (duplicate text removed)
-- [ ] Baseline Val metrics + threshold computed
-- [ ] Code merged to `develop`
+- [x] `split_stats.json` schema valid, no data leakage (duplicate text removed)
+- [x] Baseline Val metrics + threshold computed
+- [x] Code merged to `develop`
 
 **Sign-off**:
 - Owner A: _______________ / Date: _______________

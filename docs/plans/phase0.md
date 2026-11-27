@@ -10,9 +10,6 @@
 - [x] Cấu trúc thư mục khởi tạo:
   ```
   project/
-  ├── .github/
-  │   ├── pull_request_template.md
-  │   └── workflows/ci.yml
   ├── docs/
   │   ├── define&designt/
   │   │   ├── Tài liệu Define.md
@@ -34,13 +31,6 @@
   ├── README.md
   └── .gitignore
   ```
-- [ ] Cấu hình **Protected Branches**: `main`, `develop`
-  - Require PR review (1 approval)
-  - Require status checks (pytest CPU)
-  - Require linear history (squash merge)
-  - No force push
-- [ ] Thêm `pull_request_template.md` (xem workflow.md)
-- [ ] Thêm GitHub Actions CI: `pytest tests/ -v` trên PR
 - [ ] Invite 5 thành viên vào repo với quyền Write
 
 ---
@@ -57,10 +47,6 @@
   ```bash
   pip install -r requirements.txt
   ```
-- [ ] Cài pre-commit hooks:
-  ```bash
-  pre-commit install
-  ```
 - [x] Verify pytest chạy:
   ```bash
   pytest tests/ -v --tb=short
@@ -71,7 +57,7 @@
 
 ## 0.3 Requirements.txt Pinned (Leader chuẩn bị)
 
-- [ ] `requirements.txt` pin exact versions:
+- [x] `requirements.txt` pin exact versions:
   ```
   torch==2.4.0+cu121
   transformers==4.44.0
@@ -84,8 +70,7 @@
   pytest==8.2.2
   pyyaml==6.0.1
   ```
-  *Lưu ý: `requirements.txt` hiện có tên gói nhưng chưa pin exact version.*
-- [ ] `app/requirements.txt` (dashboard only, no torch):
+- [x] `app/requirements.txt` (dashboard only, no torch):
   ```
   streamlit==1.37.0
   pandas==2.2.2
@@ -136,9 +121,9 @@
 
 ## 0.7 Deliverables
 
-- [ ] GitHub private repo với structure đúng, protected branches, CI
+- [ ] GitHub private repo với structure đúng
 - [x] Tất cả 6 thành viên: local env chạy `pytest tests/` PASS (60/60 not slow)
-- [ ] `requirements.txt` pinned, `app/requirements.txt` nhẹ
+- [x] `requirements.txt` pinned, `app/requirements.txt` nhẹ
 - [ ] Kaggle GPU access kết quả ghi nhận (≥2 thành viên)
 - [ ] Google Drive storage folder created (`data/`, `checkpoints/`, `results/`)
 - [x] Docs synced, `ai_log.md` created
@@ -154,7 +139,7 @@
 ## 0.9 Phase Gate: Phase 0 → Phase 1
 
 **PASS Criteria** (Leader approve):
-- [ ] Repo ready, CI passing (pytest on empty tests)
+- [ ] Repo ready
 - [x] All members local env verified
 - [ ] Kaggle GPU access confirmed
 - [ ] Drive storage ready

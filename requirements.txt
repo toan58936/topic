@@ -1,10 +1,15 @@
-# Ghim phiên bản (pip freeze) sau lần chạy Colab đầu tiên
-torch
-transformers
-scikit-learn
-scipy
-pandas
-numpy
-pyarrow
-pyyaml
-pytest
+# Pinned exact versions for reproducibility
+# Generated from Phase 0 specification (docs/plans/phase0.md §0.3)
+torch==2.4.0+cu121
+transformers==4.44.0
+scikit-learn==1.5.1
+scipy==1.13.1
+pandas==2.2.2
+numpy==1.26.4
+pyarrow==16.1.0
+pyyaml==6.0.1
+pytest==8.2.2
+joblib==1.4.2
+streamlit==1.37.0
+accelerate==0.33.0
+tokenizers==0.19.1

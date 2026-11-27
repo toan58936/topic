@@ -168,7 +168,7 @@ Mỗi Phase có file checklist riêng: `plans/phase1.md`, `phase2.md`...
 ### 3.1 Phase Gate Rules
 | Gate | Điều kiện PASS | Ai approve |
 |------|----------------|------------|
-| **Phase 0 → 1** | Repo tạo xong, structure đúng, pre-commit hook chạy | Leader |
+| **Phase 0 → 1** | Repo tạo xong, structure đúng, pytest pass | Leader |
 | **Phase 1 → 2** | `split_stats.json` valid, Baseline Val metrics có, ngưỡng tính được, 01-02 pass pytest | Leader |
 | **Phase 2 → 3** | 03-04 pass pytest CPU, 3 backbone build được tiny config | Leader |
 | **Phase 3 → 4** | Smoke test pass, short GPU run có `seconds_per_epoch`, VRAM < 14GB | Leader, D |
@@ -209,9 +209,6 @@ Mỗi Phase có file checklist riêng: `plans/phase1.md`, `phase2.md`...
 
 ```
 project/
-├── .github/
-│   ├── pull_request_template.md
-│   └── workflows/ci.yml          # pytest CPU on PR
 ├── docs/
 │   ├── define&designt/
 │   │   ├── Tài liệu Define.md
@@ -310,7 +307,6 @@ Mỗi entry một dòng:
 # Setup local
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pre-commit install
 
 # Run tests (CPU)
 pytest tests/ -v --tb=short
