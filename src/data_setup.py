@@ -4,6 +4,7 @@ Spec: docs/define&designt/01_data.md
 Tests: docs/tests/01_data_tests.md
 """
 
+import re
 import hashlib
 import json
 import math
@@ -23,14 +24,44 @@ REQUIRED_FIELDS = ("review_id", "user_id", "business_id", "stars", "text")
 PARQUET_COLUMNS = ["review_id", "user_id", "business_id", "text", "stars"]
 
 
+_MOJIBAKE_MAP = (
+    ("â€™", "'"),
+    ("â€˜", "'"),
+    ("â€œ", '"'),
+    ("â€\x9d", '"'),
+    ("â€”", "-"),
+    ("â€“", "-"),
+    ("â€¦", "..."),
+    ("â¿", '"'),
+    ("â€", '"'),
+)
+
+
+def clean_noise(text: str) -> str:
+    """Làm sạch nhiễu nhẹ ở runtime: URL, hashtag chữ, '... (more)', mojibake.
+
+    Không ép chữ thường để an toàn cho cả mô hình cased (như RoBERTa).
+    """
+    if not isinstance(text, str):
+        return ""
+    text = re.sub(r"https?://\S+|www\.\S+", "", text)
+    # Chỉ bỏ hashtag dạng chữ (#foodporn), giữ nguyên số thứ tự như #1, #2
+    text = re.sub(r"(?<!\w)#[A-Za-z]\w*", "", text)
+    text = re.sub(r"\.\.\.\s*\(more\)", "", text)
+    for bad, good in _MOJIBAKE_MAP:
+        text = text.replace(bad, good)
+    return " ".join(text.split())
+
+
 def _clean_text(text) -> str:
-    """Chuẩn hoá văn bản: strip -> lower -> NFC -> collapse whitespace.
+    """Chuẩn hoá văn bản: làm sạch nhiễu -> strip -> lower -> NFC -> collapse whitespace.
 
     Trả về chuỗi rỗng nếu text không phải chuỗi hoặc chỉ gồm whitespace.
     """
     if not isinstance(text, str):
         return ""
-    normalized = unicodedata.normalize("NFC", text.strip().lower())
+    cleaned = clean_noise(text)
+    normalized = unicodedata.normalize("NFC", cleaned.strip().lower())
     return " ".join(normalized.split())
 
 
@@ -275,32 +306,99 @@ def prepare_splits(
     return stats
 
 
+def get_pad_token_id(tokenizer) -> int:
+    """Lấy pad_token_id an toàn cho cả HF tokenizer và FakeTokenizer."""
+    pad_id = getattr(tokenizer, "pad_token_id", None)
+    if pad_id is None:
+        pad_id = getattr(tokenizer, "pad", 0)
+    return int(pad_id) if pad_id is not None else 0
+
+
+def apply_head_tail(
+    input_ids: torch.Tensor,
+    attention_mask: torch.Tensor,
+    max_length: int,
+    pad_token_id: int,
+    *,
+    pad_to_length: int | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Cắt giữa (giữ đầu + cuối) cho một chuỗi 1-D chưa pad nếu vượt `max_length`."""
+    seq_len = int(input_ids.shape[0])
+    if seq_len > max_length:
+        if max_length <= 2:
+            out_ids = input_ids[:max_length].long()
+            out_mask = attention_mask[:max_length].long()
+        else:
+            head_tokens = (max_length - 2) // 2
+            tail_tokens = max_length - 2 - head_tokens
+            head_ids = input_ids[1 : 1 + head_tokens]
+            tail_ids = input_ids[seq_len - 1 - tail_tokens : seq_len - 1]
+            head_mask = attention_mask[1 : 1 + head_tokens]
+            tail_mask = attention_mask[seq_len - 1 - tail_tokens : seq_len - 1]
+            out_ids = torch.cat([input_ids[:1], head_ids, tail_ids, input_ids[-1:]]).long()
+            out_mask = torch.cat([attention_mask[:1], head_mask, tail_mask, attention_mask[-1:]]).long()
+    else:
+        out_ids = input_ids.long()
+        out_mask = attention_mask.long()
+
+    target_len = max_length if pad_to_length is None else pad_to_length
+    pad_len = target_len - int(out_ids.shape[0])
+    if pad_len > 0:
+        out_ids = torch.cat([out_ids, torch.full((pad_len,), pad_token_id, dtype=torch.long)])
+        out_mask = torch.cat([out_mask, torch.zeros(pad_len, dtype=torch.long)])
+    return out_ids, out_mask
+
+
 class ReviewDataset(Dataset):
     """Dataset biến một dòng parquet thành input cho transformer backbone."""
 
-    def __init__(self, df: pd.DataFrame, tokenizer, max_length: int = 256):
+    def __init__(self, df: pd.DataFrame, tokenizer, max_length: int = 256, truncation_strategy: str = "tail"):
         missing = [c for c in PARQUET_COLUMNS if c not in df.columns]
         if missing:
             raise ValueError(f"DataFrame thiếu cột: {', '.join(missing)}")
+        if truncation_strategy not in ("tail", "head_tail"):
+            raise ValueError(f"truncation_strategy phải thuộc {{tail, head_tail}}, nhận: {truncation_strategy!r}")
         self.df = df.reset_index(drop=True)
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.truncation_strategy = truncation_strategy
+        self.pad_token_id = get_pad_token_id(tokenizer)
 
     def __len__(self) -> int:
         return len(self.df)
 
     def __getitem__(self, idx: int) -> dict:
         row = self.df.iloc[idx]
-        enc = self.tokenizer(
-            row["text"],
-            truncation=True,
-            max_length=self.max_length,
-            padding="max_length",
-            return_tensors="pt",
-        )
+        text = clean_noise(row["text"])
+
+        if self.truncation_strategy == "head_tail":
+            enc = self.tokenizer(
+                text,
+                truncation=False,
+                padding=False,
+                return_tensors="pt",
+            )
+            input_ids, attention_mask = apply_head_tail(
+                enc["input_ids"][0],
+                enc["attention_mask"][0],
+                self.max_length,
+                self.pad_token_id,
+                pad_to_length=self.max_length,
+            )
+        else:
+            enc = self.tokenizer(
+                text,
+                truncation=True,
+                max_length=self.max_length,
+                padding="max_length",
+                return_tensors="pt",
+            )
+            input_ids = enc["input_ids"][0].long()
+            attention_mask = enc["attention_mask"][0].long()
+
         return {
-            "input_ids": enc["input_ids"][0].long(),
-            "attention_mask": enc["attention_mask"][0].long(),
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
             "labels": torch.tensor(float(row["stars"]), dtype=torch.float32),
             "review_id": str(row["review_id"]),
         }
@@ -313,6 +411,7 @@ def create_dataloaders(
     max_length: int = 256,
     num_workers: int = 0,
     seed: int = 42,
+    truncation_strategy: str = "tail",
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Đọc ba file parquet và trả về (train_loader, val_loader, test_loader)."""
     data_dir = Path(data_dir)
@@ -323,7 +422,7 @@ def create_dataloaders(
             raise FileNotFoundError(f"Thiếu file dữ liệu: {path}")
         frames.append(pd.read_parquet(path))
 
-    datasets = [ReviewDataset(df, tokenizer, max_length) for df in frames]
+    datasets = [ReviewDataset(df, tokenizer, max_length, truncation_strategy) for df in frames]
     generator = torch.Generator().manual_seed(seed)
     pin_memory = torch.cuda.is_available()
     train_loader = DataLoader(

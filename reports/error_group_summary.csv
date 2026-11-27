@@ -1,0 +1,6 @@
+error_group,n,pct,worst_n,random_n
+Nhãn nhiễu,0,0.000000,0,0
+Cảm xúc lẫn lộn,11,27.500000,2,9
+Bị cắt 256 token,8,20.000000,6,2
+Mỉa mai,1,2.500000,1,0
+Khác,20,50.000000,11,9

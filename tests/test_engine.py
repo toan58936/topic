@@ -111,6 +111,38 @@ def test_l4_train_one_epoch_updates():
     assert model.training
 
 
+def test_l4b_gradient_accumulation_remainder_and_scheduler(tmp_path):
+    # n=10, batch_size=4 -> 3 batches/epoch; accum=2 -> 2 optimizer/scheduler steps/epoch
+    model = tiny_model()
+    loader = make_loader(10, 4, seed=0)
+    opt, sched = build_optimizer_and_scheduler(
+        model, lr=1e-2, weight_decay=0.01, total_steps=2, warmup_ratio=0.0
+    )
+    loss_fn = build_loss("mse")
+    before = [p.detach().clone() for p in model.parameters()]
+    stats = train_one_epoch(
+        model, loader, opt, sched, loss_fn, _cpu(),
+        fp16=False, grad_clip=1.0, gradient_accumulation_steps=2,
+    )
+    assert stats["n_batches"] == 3
+    assert any(not torch.equal(b, p.detach()) for b, p in zip(before, model.parameters()))
+    # Sau 2 optimizer steps với total_steps=2 và warmup=0, lr tuyến tính phải về 0
+    assert stats["lr"] == pytest.approx(0.0, abs=1e-9)
+
+    # Kiểm tra fit() tính total_steps đúng khi gradient_accumulation_steps=2
+    cfg = base_cfg(tmp_path, epochs=2, lr=1e-2, warmup_ratio=0.0, gradient_accumulation_steps=2)
+    res = fit(
+        tiny_model(),
+        make_loader(10, 4, seed=0, shuffle=True),
+        make_loader(4, 4, seed=1),
+        cfg,
+        cfg["checkpoint_dir"],
+        cfg["results_dir"],
+        device=_cpu(),
+    )
+    assert float(res["history"].iloc[-1]["lr"]) == pytest.approx(0.0, abs=1e-9)
+
+
 def test_l5_non_finite_loss():
     model = tiny_model()
     loader = make_loader(8, 4, seed=0, nan_label_at=3)

@@ -74,6 +74,31 @@ def test_p2_predict_batch_size_invariance():
     assert np.allclose(r1, r32, atol=1e-5)
 
 
+def test_p2b_predict_head_tail_mixed_lengths():
+    model = tiny_model()
+    tok = FakeTokenizer()
+    # Trộn câu ngắn (<=12 token) và câu rất dài (>12 token) trong cùng 1 batch
+    texts = [
+        "short review",
+        " ".join([f"w{i}" for i in range(40)]),
+        "ok",
+        " ".join([f"z{i}" for i in range(25)]),
+    ]
+    r_b1 = predict(texts, model, tok, max_length=12, batch_size=1, truncation_strategy="head_tail")
+    r_b4 = predict(texts, model, tok, max_length=12, batch_size=4, truncation_strategy="head_tail")
+    assert r_b4.shape == (4,)
+    assert np.allclose(r_b1, r_b4, atol=1e-5)
+
+    # Thay đổi phần đuôi của câu dài phải làm thay đổi kết quả ở head_tail
+    texts_changed_tail = list(texts)
+    texts_changed_tail[1] = " ".join([f"w{i}" for i in range(35)] + [f"end{i}" for i in range(5)])
+    r_changed = predict(texts_changed_tail, model, tok, max_length=12, batch_size=4, truncation_strategy="head_tail")
+    assert not np.isclose(r_b4[1], r_changed[1], atol=1e-6)
+
+    with pytest.raises(ValueError):
+        predict(texts, model, tok, truncation_strategy="invalid")
+
+
 def test_p3_predict_invalid_inputs():
     model = tiny_model()
     tok = FakeTokenizer()

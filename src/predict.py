@@ -14,6 +14,7 @@ import torch
 from transformers import AutoConfig, AutoTokenizer
 
 from src import metrics
+from src.data_setup import apply_head_tail, clean_noise, get_pad_token_id
 from src.engine import evaluate
 from src.model_builder import BACKBONES, build_model
 from src.utils import get_device, load_checkpoint, write_atomic
@@ -69,7 +70,7 @@ def _resolve_fp16(fp16, device: torch.device):
 
 def predict(
     texts, model, tokenizer, *, device=None, max_length=256, batch_size=32,
-    fp16=None, clip=True,
+    fp16=None, clip=True, truncation_strategy="tail",
 ):
     """Dự đoán điểm cho một chuỗi (-> float) hoặc danh sách chuỗi (-> ndarray)."""
     single = isinstance(texts, str)
@@ -83,9 +84,12 @@ def predict(
         raise ValueError(f"max_length phải >= 1, nhận: {max_length}")
     if batch_size < 1:
         raise ValueError(f"batch_size phải >= 1, nhận: {batch_size}")
+    if truncation_strategy not in ("tail", "head_tail"):
+        raise ValueError(f"truncation_strategy phải thuộc {{tail, head_tail}}, nhận: {truncation_strategy!r}")
 
     device = _resolve_device(device)
     use_fp16 = _resolve_fp16(fp16, device)
+    pad_token_id = get_pad_token_id(tokenizer)
     was_training = model.training
     model.eval()
     model.to(device)
@@ -93,14 +97,47 @@ def predict(
     try:
         with torch.no_grad(), _autocast_ctx(use_fp16):
             for i in range(0, len(texts), batch_size):
-                batch_texts = list(texts[i : i + batch_size])
-                enc = tokenizer(
-                    batch_texts,
-                    padding=True,
-                    truncation=True,
-                    max_length=max_length,
-                    return_tensors="pt",
-                )
+                batch_texts = [clean_noise(t) for t in texts[i : i + batch_size]]
+                if truncation_strategy == "head_tail":
+                    enc = tokenizer(
+                        batch_texts,
+                        padding=True,
+                        truncation=False,
+                        return_tensors="pt",
+                    )
+                    input_ids = enc["input_ids"]
+                    attention_mask = enc["attention_mask"]
+
+                    unpadded = []
+                    for j in range(input_ids.shape[0]):
+                        keep = attention_mask[j].bool()
+                        unpadded.append((input_ids[j][keep], attention_mask[j][keep]))
+
+                    target_len = min(max(int(ids.shape[0]) for ids, _ in unpadded), max_length)
+                    new_input_ids = []
+                    new_attention_mask = []
+                    for sample_ids, sample_mask in unpadded:
+                        out_ids, out_mask = apply_head_tail(
+                            sample_ids,
+                            sample_mask,
+                            max_length,
+                            pad_token_id,
+                            pad_to_length=target_len,
+                        )
+                        new_input_ids.append(out_ids)
+                        new_attention_mask.append(out_mask)
+                    enc = {
+                        "input_ids": torch.stack(new_input_ids),
+                        "attention_mask": torch.stack(new_attention_mask),
+                    }
+                else:
+                    enc = tokenizer(
+                        batch_texts,
+                        padding=True,
+                        truncation=True,
+                        max_length=max_length,
+                        return_tensors="pt",
+                    )
                 out = model(
                     input_ids=enc["input_ids"].to(device),
                     attention_mask=enc["attention_mask"].to(device),

@@ -35,42 +35,51 @@
 
 ---
 
-## 6.2 Error Analysis (E + Leader Cross-check) — **PENDING**
+## 6.2 Error Analysis (E + Leader Cross-check) — **AUTOMATED via `scripts/error_analysis.py`**
 
-### Preparation
+### Workflow (2 commands)
 
-- [ ] Ensure `test_predictions_with_text.csv` exists on Drive/local
-- [x] Identify **best model** = lowest RMSE on Test (from `model_summary.csv`) → **RoBERTa** (RMSE=0.5240)
+**Step 1: Prepare sample (E runs once)**
+```bash
+python -m scripts.error_analysis prepare --reports-dir reports
+```
+- Auto-selects best model (lowest RMSE Test from `model_summary.csv`) → **RoBERTa**
+- Samples 40 reviews: 20 worst `abs_err` + 20 random stratified (4/star × 5, seed=42)
+- Creates 5 files in `reports/`:
+  - `error_sample.csv` — template for E (5 core cols + `error_group`, `notes`)
+  - `error_sample_with_text.csv` — full with `text`, `n_tokens`, `truncation_flag` for reading
+  - `error_analysis.csv` — E edits this (fills `error_group`, `notes` for 40 rows)
+  - `leader_crosscheck_with_text.csv` — 4 reviews for Leader (seed=42), with `leader_error_group`, `leader_notes`
+  - `error_analysis_manifest.json` — metadata (model, split_id, review_ids, leader_ids, seed)
 
-### Sampling (40 reviews total)
+**Step 2: Annotation (E + Leader)**
+- E reads `error_sample_with_text.csv`, fills `error_group` + `notes` in `error_analysis.csv` (40 rows)
+- Leader reads `leader_crosscheck_with_text.csv`, fills `leader_error_group` + `leader_notes` (4 rows)
 
-- [ ] **20 Worst-case**: Top 20 `abs_err` of best model on Test
-- [ ] **20 Random stratified**: 4 reviews per star (1-5) × 5 stars = 20, seed=42
-- [ ] Export `error_sample.csv`: `review_id`, `model`, `abs_error`, `true_stars`, `pred`
+**Step 3: Validate & Summarize (E runs)**
+```bash
+python -m scripts.error_analysis summarize --reports-dir reports
+```
+- Validates: 40 unique reviews, no data tampering, `error_group` ∈ 5 groups, `notes` non-empty, truncation flag consistency
+- Cross-check: Leader labels vs E labels on 4 reviews → agreement ≥ 75% (3/4) required
+- Outputs:
+  - `error_group_summary.csv` — table: group, n, pct, worst_n, random_n
+  - `error_analysis_summary.md` — markdown ready for report (table + examples + disclaimer)
 
-### Annotation (E reads 40 reviews, assigns 1 of 5 groups)
-
+### 5 Error Groups (hardcoded in script)
 | Group | Definition |
 |-------|------------|
-| **Nhãn nhiễu** | Nội dung tích cực (good, great, love...) nhưng sao ≤2; hoặc tiêu cực (bad, terrible...) nhưng sao ≥4 |
-| **Cảm xúc lẫn lộn** | Có cả khen và chê, từ khóa chuyển tiếp: but, however, although, though |
-| **Bị cắt 256 token** | `n_tokens > 254` (đã trừ [CLS] [SEP]) |
-| **Mỉa mai** | Ngữ nghĩa đảo ngược so với từ khóa, cần đọc hiểu context |
-| **Khác** | Không rơi 4 nhóm trên, ghi note cụ thể |
+| **Nhãn nhiễu** | Positive words (good, great, love...) but stars ≤2; negative words (bad, terrible...) but stars ≥4 |
+| **Cảm xúc lẫn lộn** | Mixed sentiment with transition words: but, however, although, though |
+| **Bị cắt 256 token** | `n_tokens > 254` (from predictions column) |
+| **Mỉa mai** | Semantic reversal, needs context understanding |
+| **Khác** | None of above, write specific note |
 
-- [ ] E fills `error_group` + `notes` in spreadsheet
-- [ ] Export `reports/error_analysis.csv`: `review_id,model,abs_error,true_stars,pred,error_group,notes`
-
-### Leader Cross-check (10% = 4 reviews)
-
-- [ ] Leader independently annotates 4 random reviews from the 40
-- [ ] Agreement ≥ 75% (3/4) → PASS
-- [ ] If < 75%: discuss, re-annotate disputed, repeat
-
-### Summary for Report
-
-- [ ] Compute % per error group
-- [ ] Write error analysis section in report
+### Guardrails
+- `prepare` fails if output files exist (no overwrite)
+- `summarize` fails if data changed since `prepare` (manifest mismatch)
+- `summarize` fails if cross-check agreement < 75% (must discuss + re-annotate)
+- All validation raises clear `ValueError` with actionable message
 
 ---
 

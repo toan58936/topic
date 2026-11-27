@@ -84,6 +84,7 @@ def _resolve_fp16(fp16, device: torch.device):
 def train_one_epoch(
     model, loader, optimizer, scheduler, loss_fn, device, *,
     scaler=None, fp16=True, grad_clip=1.0, log_every=100, epoch=0,
+    gradient_accumulation_steps=1,
 ) -> dict:
     """Một epoch huấn luyện; trả về train_loss (trung bình theo mẫu), n_batches, lr."""
     model.train()
@@ -105,13 +106,18 @@ def train_one_epoch(
         else contextlib.nullcontext()
     )
 
+    num_batches = len(loader)
+    if num_batches == 0:
+        raise ValueError("loader rỗng")
+    accum_steps = max(1, int(gradient_accumulation_steps))
+    optimizer.zero_grad(set_to_none=True)
+
     for step, batch in enumerate(loader, start=1):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
         n = labels.shape[0]
 
-        optimizer.zero_grad(set_to_none=True)
         with autocast_ctx:
             out = model(input_ids=input_ids, attention_mask=attention_mask)
         loss = loss_fn(out.float(), labels)
@@ -121,24 +127,35 @@ def train_one_epoch(
                 f"Loss không hữu hạn ({loss_value}) tại bước {step}, epoch {epoch}"
             )
 
-        skipped = False
-        if scaler is not None:
-            scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            if grad_clip:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            scale_before = scaler.get_scale()
-            scaler.step(optimizer)
-            scaler.update()
-            skipped = scaler.get_scale() < scale_before
-        else:
-            loss.backward()
-            if grad_clip:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            optimizer.step()
+        # Chia loss theo đúng kích thước cửa sổ cộng dồn (kể cả phần dư cuối epoch)
+        window_start = ((step - 1) // accum_steps) * accum_steps
+        current_accum = min(accum_steps, num_batches - window_start)
+        scaled_loss = loss / current_accum
 
-        if not skipped:
-            scheduler.step()
+        if scaler is not None:
+            scaler.scale(scaled_loss).backward()
+        else:
+            scaled_loss.backward()
+
+        # Cập nhật trọng số khi đủ accum_steps hoặc ở batch cuối của epoch
+        if step % accum_steps == 0 or step == num_batches:
+            skipped = False
+            if scaler is not None:
+                scaler.unscale_(optimizer)
+                if grad_clip:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                scale_before = scaler.get_scale()
+                scaler.step(optimizer)
+                scaler.update()
+                skipped = scaler.get_scale() < scale_before
+            else:
+                if grad_clip:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                optimizer.step()
+
+            if not skipped:
+                scheduler.step()
+            optimizer.zero_grad(set_to_none=True)
 
         total_loss += loss_value * n
         total_samples += n
@@ -262,6 +279,7 @@ def _config_diff(stored: dict, current: dict) -> list:
 def fit(
     model, train_loader, val_loader, run_config, checkpoint_dir, results_dir, *,
     device=None, resume=True, overwrite=False, keep_last=False, stop_after_epoch=None,
+    gradient_accumulation_steps=None,
 ) -> dict:
     """Huấn luyện `epochs` epoch: checkpoint mỗi epoch, resume, history.csv, run_meta.json."""
     epochs = int(run_config.get("epochs", 3))
@@ -332,8 +350,17 @@ def fit(
     res_run_dir.mkdir(parents=True, exist_ok=True)
 
     # --- Dựng loss, optimizer, scheduler, scaler ---
+    accum_steps = (
+        int(run_config.get("gradient_accumulation_steps", 1))
+        if gradient_accumulation_steps is None
+        else int(gradient_accumulation_steps)
+    )
+    if accum_steps < 1:
+        raise ValueError(f"gradient_accumulation_steps phải >= 1, nhận: {accum_steps}")
+
     loss_fn = build_loss(run_config.get("loss", "huber"), run_config.get("huber_delta", 1.0))
-    total_steps = epochs * len(train_loader)
+    steps_per_epoch = math.ceil(len(train_loader) / accum_steps)
+    total_steps = epochs * steps_per_epoch
     optimizer, scheduler = build_optimizer_and_scheduler(
         model,
         lr=float(run_config.get("lr", 2e-5)),
@@ -427,6 +454,7 @@ def fit(
             model, train_loader, optimizer, scheduler, loss_fn, device,
             scaler=scaler, fp16=use_fp16, grad_clip=grad_clip,
             log_every=log_every, epoch=epoch,
+            gradient_accumulation_steps=accum_steps,
         )
         val = evaluate(model, val_loader, device, loss_fn=loss_fn, fp16=None)
         if device.type == "cuda":

@@ -134,7 +134,7 @@ Tất cả mô hình được đo trên cùng một tập test cố định (`se
 | `rmse_reduction_vs_baseline_pct` | Tỉ lệ giảm RMSE so với baseline, tính trên Test |
 
 - **Biểu đồ:** điểm dự đoán so với điểm thật, phân phối sai số, sai số theo từng mức sao; cùng bảng so sánh và các ca đoán sai điển hình, chúng tạo thành dashboard trình bày kết quả.
-- **Phân tích lỗi:** đọc một mẫu cố định 40 review từ bản có nội dung: 20 review có sai số lớn nhất của mô hình tốt nhất và 20 review ngẫu nhiên từ Test. Mỗi review gán một nhóm: mỉa mai, cảm xúc lẫn lộn, bị cắt ở 256 token, nhãn nhiễu, hoặc khác; báo cáo tỉ lệ từng nhóm. Tỉ lệ review Test bị cắt tính từ cột `n_tokens` (lớn hơn 254).
+- **Phân tích lỗi:** chạy script tự động `scripts/error_analysis.py` trên `test_predictions_with_text.csv` để lấy mẫu cố định 40 review (20 worst-case + 20 random stratified 4/sao, seed=42). Script xuất template cho thành viên E gán nhãn 5 nhóm (nhãn nhiễu, cảm xúc lẫn lộn, bị cắt token, mỉa mai, khác) và file cross-check cho Leader (10% = 4 review, ngưỡng đồng thuận ≥75%). Script validate annotation, kiểm tra cross-check, và xuất `error_analysis_summary.md` + `error_group_summary.csv` cho báo cáo.
 - **Mục tiêu:** theo mục 4.
 - **Giới hạn trong báo cáo:** nhãn là sao nguyên; một seed và ba checkpoint khác loại; phân phối lệch sao cao; nhãn nhiễu; trùng `user_id`/`business_id`; review không phải tiếng Anh; Mean pooling chọn theo lập luận kỹ thuật, không theo thực nghiệm; tái lập gần đúng.
 - **Đối chiếu:** kết quả huấn luyện thật được kiểm tra lại với tài liệu này (input/output, ràng buộc, tiêu chí) ở bước Check description trong tài liệu Design.

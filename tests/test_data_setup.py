@@ -13,6 +13,8 @@ from torch.utils.data import RandomSampler, SequentialSampler
 from src.data_setup import (
     ReviewDataset,
     _allocate_counts,
+    _clean_text,
+    clean_noise,
     create_dataloaders,
     prepare_splits,
 )
@@ -135,6 +137,24 @@ def test_d6_cleaning(tmp_path):
     assert messy.iloc[0]["text"] == "lots of spaces here"
 
 
+def test_d6b_cleaning_noise_and_mojibake():
+    raw = (
+        "Check https://example.com/a and www.test.org! "
+        "#1 pizza in town #foodporn ... (more) "
+        "Itâ€™s â€œgreatâ€ and â¿freshâ¿"
+    )
+    cleaned_rt = clean_noise(raw)
+    assert "https://" not in cleaned_rt
+    assert "www.test.org" not in cleaned_rt
+    assert "#foodporn" not in cleaned_rt
+    assert "#1 pizza" in cleaned_rt
+    assert "(more)" not in cleaned_rt
+    assert "It's \"great\" and \"fresh\"" in cleaned_rt
+    # clean_noise giữ nguyên viết hoa; _clean_text mới lower
+    assert "Check" in cleaned_rt
+    assert _clean_text(raw).startswith("check #1 pizza")
+
+
 def test_d7_invalid_inputs(fake_review_file, tmp_path):
     with pytest.raises(FileNotFoundError):
         prepare_splits(str(tmp_path / "nope.json"), str(tmp_path / "o1"))
@@ -231,6 +251,43 @@ def test_d11_truncate_and_pad(fake_tokenizer):
     pad_positions = short_item["attention_mask"] == 0
     assert pad_positions.sum().item() > 0
     assert short_item["input_ids"][pad_positions].eq(0).all()
+
+
+def test_d11b_head_tail_truncation(fake_tokenizer):
+    head_words = [f"head{i}" for i in range(15)]
+    mid_words = [f"mid{i}" for i in range(20)]
+    tail_words = [f"tail{i}" for i in range(15)]
+    long_text = " ".join(head_words + mid_words + tail_words)
+
+    df = pd.DataFrame(
+        {
+            "review_id": ["long", "short"],
+            "user_id": ["u1", "u2"],
+            "business_id": ["b1", "b2"],
+            "text": [long_text, "hi there"],
+            "stars": [5, 1],
+        }
+    )
+    ds = ReviewDataset(df, fake_tokenizer, max_length=16, truncation_strategy="head_tail")
+    long_item = ds[0]
+    short_item = ds[1]
+
+    assert long_item["input_ids"].shape == (16,)
+    assert long_item["attention_mask"].sum().item() == 16
+    assert int(long_item["input_ids"][0]) == fake_tokenizer.bos
+    assert int(long_item["input_ids"][-1]) == fake_tokenizer.eos
+
+    # Kiểm tra các token đầu và cuối thực sự được giữ lại (không mất đuôi)
+    full_ids = fake_tokenizer(long_text, truncation=False)["input_ids"][0]
+    # max_length=16 -> 7 head + 7 tail
+    assert torch.equal(long_item["input_ids"][1:8], full_ids[1:8])
+    assert torch.equal(long_item["input_ids"][8:15], full_ids[-8:-1])
+
+    assert short_item["input_ids"].shape == (16,)
+    assert short_item["attention_mask"].sum().item() == 4  # BOS + "hi" + "there" + EOS
+
+    with pytest.raises(ValueError):
+        ReviewDataset(df, fake_tokenizer, max_length=16, truncation_strategy="invalid")
 
 
 def test_d12_loader_flags_and_batch(prepared_dir, fake_tokenizer):

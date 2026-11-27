@@ -176,3 +176,23 @@ def test_t5_cli_overrides(tmp_path, monkeypatch):
     assert rc == 0
     _, kwargs = calls[-1]
     assert kwargs["overwrite"] is True and kwargs["resume"] is False
+
+
+def test_t1b_load_config_v2_and_new_keys(tmp_path):
+    v2_path = Path("configs/train_roberta_v2.yaml")
+    if v2_path.exists():
+        cfg = train_mod.load_config(str(v2_path))
+        assert cfg["run_name"] == "roberta_v2"
+        assert cfg["max_length"] == 512
+        assert cfg["batch_size"] == 8
+        assert cfg["gradient_accumulation_steps"] == 2
+        assert cfg["epochs"] == 5
+        assert cfg["truncation_strategy"] == "head_tail"
+
+    bad_accum = _minimal_yaml(tmp_path, gradient_accumulation_steps=0)
+    with pytest.raises(ValueError):
+        train_mod.load_config(str(bad_accum))
+
+    bad_trunc = _minimal_yaml(tmp_path, truncation_strategy="middle")
+    with pytest.raises(ValueError):
+        train_mod.load_config(str(bad_trunc))

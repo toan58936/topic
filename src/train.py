@@ -40,9 +40,11 @@ DEFAULT_CONFIG = {
     "data_dir": None,
     "checkpoint_dir": None,
     "results_dir": None,
+    "gradient_accumulation_steps": 1,
+    "truncation_strategy": "tail",
 }
 
-INT_KEYS = {"seed", "max_length", "batch_size", "epochs", "num_workers", "log_every"}
+INT_KEYS = {"seed", "max_length", "batch_size", "epochs", "num_workers", "log_every", "gradient_accumulation_steps"}
 FLOAT_KEYS = {
     "dropout", "huber_delta", "lr", "weight_decay", "warmup_ratio", "grad_clip",
 }
@@ -96,6 +98,10 @@ def load_config(path: str, overrides: Optional[Dict[str, str]] = None) -> dict:
         raise ValueError(f"batch_size phải >= 1, nhận: {cfg['batch_size']}")
     if cfg["max_length"] < 1:
         raise ValueError(f"max_length phải >= 1, nhận: {cfg['max_length']}")
+    if int(cfg.get("gradient_accumulation_steps", 1)) < 1:
+        raise ValueError(f"gradient_accumulation_steps phải >= 1, nhận: {cfg.get('gradient_accumulation_steps')}")
+    if cfg["truncation_strategy"] not in ("tail", "head_tail"):
+        raise ValueError(f"truncation_strategy phải thuộc {{tail, head_tail}}, nhận: {cfg['truncation_strategy']!r}")
     if float(cfg["lr"]) <= 0:
         raise ValueError(f"lr phải > 0, nhận: {cfg['lr']}")
     if not (0.0 <= float(cfg["warmup_ratio"]) < 1.0):
@@ -143,6 +149,7 @@ def run_training(cfg: dict, *, model=None, loaders=None, resume=True, overwrite=
             max_length=int(cfg["max_length"]),
             num_workers=int(cfg["num_workers"]),
             seed=int(cfg["seed"]),
+            truncation_strategy=cfg.get("truncation_strategy", "tail"),
         )
     train_loader, val_loader, _test_loader = loaders
 
@@ -168,6 +175,7 @@ def run_training(cfg: dict, *, model=None, loaders=None, resume=True, overwrite=
         model, train_loader, val_loader, cfg,
         cfg["checkpoint_dir"], cfg["results_dir"],
         device=device, resume=resume, overwrite=overwrite,
+        gradient_accumulation_steps=int(cfg.get("gradient_accumulation_steps", 1)),
     )
 
 

@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error Analysis Dashboard — RoBERTa Model</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d27;
+            --card-hover: #22263a;
+            --border: #2a2e3d;
+            --text: #e4e6eb;
+            --text-dim: #8b8fa3;
+            --accent: #6366f1;
+            --accent2: #22d3ee;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --purple: #a78bfa;
+            --pink: #f472b6;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a5f 100%);
+            padding: 2rem 2rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #c7d2fe, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.3rem;
+        }
+        .header .subtitle {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+        .header .meta-row {
+            display: flex; gap: 1.5rem; margin-top: 0.8rem; flex-wrap: wrap;
+        }
+        .meta-badge {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            background: rgba(99,102,241,0.15);
+            border: 1px solid rgba(99,102,241,0.3);
+            border-radius: 999px; padding: 0.3rem 0.9rem;
+            font-size: 0.82rem; color: #a5b4fc;
+        }
+        .meta-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+
+        /* KPI cards */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem; margin-bottom: 1.5rem;
+        }
+        .kpi-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem 1.4rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .kpi-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+        .kpi-card .label { font-size: 0.78rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+        .kpi-card .value { font-size: 2rem; font-weight: 700; margin: 0.2rem 0; }
+        .kpi-card .sub { font-size: 0.8rem; color: var(--text-dim); }
+        .kpi-card.accent .value { color: var(--accent); }
+        .kpi-card.danger .value { color: var(--danger); }
+        .kpi-card.warning .value { color: var(--warning); }
+        .kpi-card.success .value { color: var(--success); }
+        .kpi-card.cyan .value { color: var(--accent2); }
+
+        /* Charts grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+            gap: 1.5rem; margin-bottom: 1.5rem;
+        }
+        .chart-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.4rem;
+        }
+        .chart-card h3 {
+            font-size: 1rem; font-weight: 600;
+            margin-bottom: 1rem; color: var(--text);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .chart-card h3 .icon { font-size: 1.1rem; }
+        .chart-wrap { position: relative; width: 100%; }
+
+        /* Full-width card */
+        .full-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.4rem; margin-bottom: 1.5rem;
+        }
+        .full-card h3 {
+            font-size: 1rem; font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+
+        /* Table */
+        .data-table {
+            width: 100%; border-collapse: separate;
+            border-spacing: 0; font-size: 0.85rem;
+        }
+        .data-table thead th {
+            background: rgba(99,102,241,0.08);
+            color: var(--text-dim); font-weight: 600;
+            text-align: left; padding: 0.7rem 0.8rem;
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 2;
+            cursor: pointer; user-select: none;
+            white-space: nowrap;
+        }
+        .data-table thead th:hover { color: var(--accent); }
+        .data-table thead th .sort-icon { margin-left: 0.3rem; font-size: 0.7rem; }
+        .data-table tbody tr {
+            transition: background 0.15s;
+        }
+        .data-table tbody tr:hover { background: var(--card-hover); }
+        .data-table tbody td {
+            padding: 0.6rem 0.8rem;
+            border-bottom: 1px solid rgba(42,46,61,0.5);
+            vertical-align: top;
+        }
+
+        .error-bar {
+            display: inline-block; height: 8px; border-radius: 4px;
+            background: linear-gradient(90deg, var(--warning), var(--danger));
+            vertical-align: middle;
+        }
+        .badge {
+            display: inline-block; padding: 0.15rem 0.55rem;
+            border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+        }
+        .badge-mixed { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+        .badge-truncated { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+        .badge-sarcasm { background: rgba(167,139,250,0.15); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.3); }
+        .badge-other { background: rgba(107,114,128,0.15); color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+        .badge-noise { background: rgba(244,114,182,0.15); color: #f9a8d4; border: 1px solid rgba(244,114,182,0.3); }
+        .badge-worst { background: rgba(239,68,68,0.12); color: #fca5a5; }
+        .badge-random { background: rgba(34,211,238,0.12); color: #67e8f9; }
+
+        .star { color: #fbbf24; }
+        .text-preview {
+            max-width: 350px; max-height: 60px; overflow: hidden;
+            text-overflow: ellipsis; color: var(--text-dim); font-size: 0.8rem;
+            line-height: 1.4; cursor: pointer;
+        }
+        .text-preview.expanded { max-height: none; }
+
+        /* Filter bar */
+        .filter-bar {
+            display: flex; gap: 0.8rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center;
+        }
+        .filter-btn {
+            padding: 0.4rem 0.9rem; border-radius: 999px;
+            border: 1px solid var(--border); background: transparent;
+            color: var(--text-dim); font-size: 0.82rem; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover, .filter-btn.active {
+            border-color: var(--accent); color: var(--accent);
+            background: rgba(99,102,241,0.1);
+        }
+
+        /* Scroll wrapper for table */
+        .table-scroll { max-height: 600px; overflow-y: auto; border-radius: 8px; }
+        .table-scroll::-webkit-scrollbar { width: 6px; }
+        .table-scroll::-webkit-scrollbar-track { background: var(--card); }
+        .table-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Insight cards */
+        .insights-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem; margin-bottom: 1.5rem;
+        }
+        .insight-card {
+            background: var(--card); border-radius: 12px; padding: 1.2rem 1.4rem;
+            border-left: 3px solid var(--accent);
+        }
+        .insight-card.warn { border-left-color: var(--warning); }
+        .insight-card.err { border-left-color: var(--danger); }
+        .insight-card.info { border-left-color: var(--accent2); }
+        .insight-card h4 { font-size: 0.9rem; margin-bottom: 0.4rem; }
+        .insight-card p { font-size: 0.83rem; color: var(--text-dim); }
+
+        @media (max-width: 768px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 1.3rem; }
+            .kpi-card .value { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🔍 Error Analysis Dashboard</h1>
+    <div class="subtitle">Phân tích lỗi dự đoán — Mô hình RoBERTa trên tập Yelp Review Stars</div>
+    <div class="meta-row">
+        <span class="meta-badge"><span class="dot"></span> Model: RoBERTa</span>
+        <span class="meta-badge"><span class="dot"></span> Split: f0e6776f8a1a</span>
+        <span class="meta-badge"><span class="dot"></span> Mẫu: 40 reviews (20 worst + 20 random)</span>
+        <span class="meta-badge"><span class="dot"></span> Test set: 8,999 reviews</span>
+        <span class="meta-badge"><span class="dot"></span> Phương pháp: Rule-based NLP Heuristic</span>
+    </div>
+</div>
+
+<div class="container">
+
+    <!-- KPI Row -->
+    <div class="kpi-row">
+        <div class="kpi-card accent">
+            <div class="label">Tổng mẫu phân tích</div>
+            <div class="value">40</div>
+            <div class="sub">20 worst + 20 random</div>
+        </div>
+        <div class="kpi-card danger">
+            <div class="label">Sai số trung bình (mẫu)</div>
+            <div class="value" id="kpi-mae">—</div>
+            <div class="sub">Mean Absolute Error</div>
+        </div>
+        <div class="kpi-card warning">
+            <div class="label">Sai số lớn nhất</div>
+            <div class="value" id="kpi-max">—</div>
+            <div class="sub" id="kpi-max-id">—</div>
+        </div>
+        <div class="kpi-card cyan">
+            <div class="label">Tỉ lệ bị cắt token</div>
+            <div class="value">11.5%</div>
+            <div class="sub">1,039 / 8,999 test reviews</div>
+        </div>
+        <div class="kpi-card success">
+            <div class="label">Nhóm lỗi chính</div>
+            <div class="value">4</div>
+            <div class="sub">Nhãn nhiễu · Cảm xúc lẫn lộn · Cắt token · Mỉa mai</div>
+        </div>
+    </div>
+
+    <!-- Insight cards -->
+    <div class="insights-grid">
+        <div class="insight-card err">
+            <h4>⚠️ Nhóm "Khác" chiếm 50%</h4>
+            <p>20/40 mẫu không thuộc nhóm lỗi rõ ràng → cần review thủ công hoặc bổ sung heuristic để phân nhóm chi tiết hơn.</p>
+        </div>
+        <div class="insight-card warn">
+            <h4>📏 Cắt 256 token gây sai số lớn</h4>
+            <p>8 mẫu bị cắt token có MAE trung bình cao hơn đáng kể. 11.5% test set bị truncation — đáng cân nhắc tăng max_length.</p>
+        </div>
+        <div class="insight-card info">
+            <h4>😕 Cảm xúc lẫn lộn khó dự đoán</h4>
+            <p>11 mẫu (27.5%) chứa cả từ khen lẫn chê. Mô hình thiên về sentiment mạnh hơn, bỏ qua sắc thái tương phản.</p>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3><span class="icon">🥧</span> Phân bố nhóm lỗi</h3>
+            <div class="chart-wrap"><canvas id="chartPie"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3><span class="icon">📊</span> Sai số trung bình theo nhóm</h3>
+            <div class="chart-wrap"><canvas id="chartBarGroup"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3><span class="icon">🎯</span> True Stars vs Predicted</h3>
+            <div class="chart-wrap"><canvas id="chartScatter"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3><span class="icon">📈</span> Phân bố sai số (Abs Error)</h3>
+            <div class="chart-wrap"><canvas id="chartHistogram"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3><span class="icon">⭐</span> Sai số trung bình theo số sao thật</h3>
+            <div class="chart-wrap"><canvas id="chartBarStar"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3><span class="icon">🔀</span> Worst vs Random — so sánh sai số</h3>
+            <div class="chart-wrap"><canvas id="chartCompare"></canvas></div>
+        </div>
+    </div>
+
+    <!-- Confusion-style heatmap -->
+    <div class="full-card">
+        <h3><span class="icon">🔥</span> Heatmap: True Stars × Error Group — Trung bình sai số</h3>
+        <div id="heatmap" style="overflow-x:auto;"></div>
+    </div>
+
+    <!-- Detailed Table -->
+    <div class="full-card">
+        <h3><span class="icon">📋</span> Chi tiết từng review</h3>
+        <div class="filter-bar">
+            <button class="filter-btn active" data-filter="all">Tất cả (40)</button>
+            <button class="filter-btn" data-filter="Cảm xúc lẫn lộn">😕 Cảm xúc lẫn lộn (11)</button>
+            <button class="filter-btn" data-filter="Bị cắt 256 token">✂️ Bị cắt token (8)</button>
+            <button class="filter-btn" data-filter="Mỉa mai">😏 Mỉa mai (1)</button>
+            <button class="filter-btn" data-filter="Khác">❓ Khác (20)</button>
+            <button class="filter-btn" data-filter="worst">🔴 Worst 20</button>
+            <button class="filter-btn" data-filter="random">🔵 Random 20</button>
+        </div>
+        <div class="table-scroll">
+            <table class="data-table" id="mainTable">
+                <thead>
+                    <tr>
+                        <th data-sort="idx"># <span class="sort-icon">▼</span></th>
+                        <th data-sort="review_id">Review ID</th>
+                        <th data-sort="abs_error">Abs Error <span class="sort-icon">▼</span></th>
+                        <th data-sort="true_stars">True ⭐</th>
+                        <th data-sort="pred">Predicted</th>
+                        <th data-sort="error_group">Nhóm lỗi</th>
+                        <th data-sort="sample_type">Loại mẫu</th>
+                        <th data-sort="n_tokens">Tokens</th>
+                        <th>Nội dung review</th>
+                        <th>Ghi chú</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// ============ DATA ============
+const DATA = [
+    {review_id:"9B-89poaShREU2_aqK4Twg",abs_error:4.000,true_stars:5,pred:1.000,error_group:"Khác",notes:"Review ngắn/trung tính (89 token) hoặc sắc thái mơ hồ; dự đoán 1.00 so với thật 5.",sample_type:"worst",n_tokens:89,truncation:false,text:"my daughter's 3 month old, 2016 subaru outback sits dead to the world in our garage..."},
+    {review_id:"Drdrx5eWHCR-ZLP4Pl8iew",abs_error:4.000,true_stars:5,pred:1.000,error_group:"Bị cắt 256 token",notes:"Văn bản dài 462 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 4.00.",sample_type:"worst",n_tokens:462,truncation:true,text:"i went to the cobb theater in st. petersburg on 11/3/2017 for the 8:30 pm showing of thor..."},
+    {review_id:"0T7-xv4N7pgSE7PazLH2bQ",abs_error:3.980,true_stars:5,pred:1.020,error_group:"Khác",notes:"Review ngắn/trung tính (34 token) hoặc sắc thái mơ hồ; dự đoán 1.02 so với thật 5.",sample_type:"worst",n_tokens:34,truncation:false,text:"we dont fuck wit you fat bitches anyway. fuck you and your ice machine hoe..."},
+    {review_id:"k0iGnHmIPWuZNrUWuJEOAQ",abs_error:3.950,true_stars:5,pred:1.050,error_group:"Bị cắt 256 token",notes:"Văn bản dài 575 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 3.95.",sample_type:"worst",n_tokens:575,truncation:true,text:"i've been a customer for over 9 years since the italian market location opened..."},
+    {review_id:"jeIqIIH-FU68IOiVFClUHQ",abs_error:3.644,true_stars:5,pred:1.356,error_group:"Khác",notes:"Review ngắn/trung tính (49 token) hoặc sắc thái mơ hồ; dự đoán 1.36 so với thật 5.",sample_type:"worst",n_tokens:49,truncation:false,text:"boo! johnnie brock's is the most expensive place in st louis to get your halloween fix!..."},
+    {review_id:"PXnWZ95OJIVXUmOxVWa-nA",abs_error:3.592,true_stars:5,pred:1.408,error_group:"Bị cắt 256 token",notes:"Văn bản dài 262 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 3.59.",sample_type:"worst",n_tokens:262,truncation:true,text:"very disappointing breakfast today. not very busy..."},
+    {review_id:"FkAsvNcsywF8_pidjU75ew",abs_error:3.570,true_stars:1,pred:4.570,error_group:"Khác",notes:"Review ngắn/trung tính (72 token) hoặc sắc thái mơ hồ; dự đoán 4.57 so với thật 1.",sample_type:"worst",n_tokens:72,truncation:false,text:"went in to have my van looked at before a long drive. had been shaking dramatically..."},
+    {review_id:"Xqu1cSRAhKS6z_T7ch2jIw",abs_error:3.441,true_stars:1,pred:4.441,error_group:"Khác",notes:"Review ngắn/trung tính (58 token) hoặc sắc thái mơ hồ; dự đoán 4.44 so với thật 1.",sample_type:"worst",n_tokens:58,truncation:false,text:"i'm having some issues with the warranty coverage on my mercedes benz c300..."},
+    {review_id:"HEBpSLR3wj-5K_3qINQmYw",abs_error:3.430,true_stars:1,pred:4.430,error_group:"Khác",notes:"Review ngắn/trung tính (87 token) hoặc sắc thái mơ hồ; dự đoán 4.43 so với thật 1.",sample_type:"worst",n_tokens:87,truncation:false,text:"went for the philadelphia travel show and beer fest with some tickets..."},
+    {review_id:"ftlY2svGWe5kfb0H35KPGw",abs_error:3.230,true_stars:1,pred:4.230,error_group:"Bị cắt 256 token",notes:"Văn bản dài 263 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 3.23.",sample_type:"worst",n_tokens:263,truncation:true,text:"i have been coming here close to 6 years the gradual progression of neglect..."},
+    {review_id:"sDWA9clWUIDCPOTURqxm9w",abs_error:3.154,true_stars:5,pred:1.846,error_group:"Khác",notes:"Review ngắn/trung tính (20 token) hoặc sắc thái mơ hồ; dự đoán 1.85 so với thật 5.",sample_type:"worst",n_tokens:20,truncation:false,text:"vegans ask for the norteño with mushrooms instead of beef and no cheese. unbelievable."},
+    {review_id:"r7my8f5IfzUClhXpDnr6Fg",abs_error:3.117,true_stars:1,pred:4.117,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('great') và chê kèm từ nối tương phản.",sample_type:"worst",n_tokens:122,truncation:false,text:"jen, the dental hygienist, was splendid.... the weird closed-door side room..."},
+    {review_id:"Dqk1h8Hx5wIH-MZro-djrw",abs_error:3.102,true_stars:1,pred:4.102,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('great') và chê kèm từ nối tương phản.",sample_type:"worst",n_tokens:39,truncation:false,text:"it might be a step up from a school cafeteria. great salads though..."},
+    {review_id:"GPcH6XYNkGOntvVHd6gD8g",abs_error:2.996,true_stars:2,pred:4.996,error_group:"Bị cắt 256 token",notes:"Văn bản dài 516 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 3.00.",sample_type:"worst",n_tokens:516,truncation:true,text:"original review was 5 stars: i want to say thanks and compliment the staff..."},
+    {review_id:"eMZV1qakSmRb22HMKBWENQ",abs_error:2.990,true_stars:4,pred:1.010,error_group:"Bị cắt 256 token",notes:"Văn bản dài 579 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 2.99.",sample_type:"worst",n_tokens:579,truncation:true,text:"when i was in college, living in pilam, we used to compare the house..."},
+    {review_id:"tOVPSvj3kepM3DJD0uelBQ",abs_error:2.977,true_stars:2,pred:4.977,error_group:"Khác",notes:"Review ngắn/trung tính (31 token) hoặc sắc thái mơ hồ; dự đoán 4.98 so với thật 2.",sample_type:"worst",n_tokens:31,truncation:false,text:"food is so so. view is amazing as is the overall ambiance..."},
+    {review_id:"45AIVHHzJMrPg2qLLQieMw",abs_error:2.938,true_stars:1,pred:3.938,error_group:"Mỉa mai",notes:"Biểu hiện mỉa mai/từ tích cực ngược ngữ cảnh (love, perfect) khiến mô hình dự đoán 3.94 sao.",sample_type:"worst",n_tokens:35,truncation:false,text:"felt like a frat house ... perfect visit 1x ... unless you love german food & beer..."},
+    {review_id:"9CNAKn5BQgQfDz_kcVHy6w",abs_error:2.894,true_stars:4,pred:1.106,error_group:"Khác",notes:"Review ngắn/trung tính (131 token) hoặc sắc thái mơ hồ; dự đoán 1.11 so với thật 4.",sample_type:"worst",n_tokens:131,truncation:false,text:"after a run-around with apria, i found these guys online..."},
+    {review_id:"uFtdhJZgxNJ2aW7sShagkg",abs_error:2.872,true_stars:4,pred:1.128,error_group:"Khác",notes:"Review ngắn/trung tính (59 token) hoặc sắc thái mơ hồ; dự đoán 1.13 so với thật 4.",sample_type:"worst",n_tokens:59,truncation:false,text:"it took me forever to find to eat bc of construction then when i came in..."},
+    {review_id:"L5GP5dy2OqNSP8qOw48hRQ",abs_error:2.853,true_stars:4,pred:1.147,error_group:"Khác",notes:"Review ngắn/trung tính (26 token) hoặc sắc thái mơ hồ; dự đoán 1.15 so với thật 4.",sample_type:"worst",n_tokens:26,truncation:false,text:"wrong address for this. silver legacy is a block north, and on the other side..."},
+    // Random 20
+    {review_id:"QXmJFLgYHstVWtJRvuHhow",abs_error:0.053,true_stars:1,pred:1.053,error_group:"Khác",notes:"Review ngắn/trung tính (55 token); dự đoán 1.05 so với thật 1.",sample_type:"random",n_tokens:55,truncation:false,text:"sat outside to avoid the smoke. waiter took our drink order..."},
+    {review_id:"4rgtY9o7cZ7aR0MfU5RIVQ",abs_error:1.004,true_stars:1,pred:2.004,error_group:"Bị cắt 256 token",notes:"Văn bản dài 255 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 1.00.",sample_type:"random",n_tokens:255,truncation:true,text:"as lovers of pie we were excited to visit pie land..."},
+    {review_id:"ctaK-qF_ZIOs9gjkUN7cZw",abs_error:0.682,true_stars:1,pred:1.682,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('great') và chê kèm từ nối tương phản.",sample_type:"random",n_tokens:73,truncation:false,text:"great staff and clean so this is not a local issue..."},
+    {review_id:"lGKZeeQ17rgiVNZtHsD-ow",abs_error:0.650,true_stars:1,pred:1.650,error_group:"Khác",notes:"Review ngắn/trung tính (25 token); dự đoán 1.65 so với thật 1.",sample_type:"random",n_tokens:25,truncation:false,text:"this place is average at best. salt and pepper is a condiment..."},
+    {review_id:"dciOUxAv3Be3rFs_qfTuag",abs_error:1.000,true_stars:2,pred:1.000,error_group:"Bị cắt 256 token",notes:"Văn bản dài 430 token (>254), phần nội dung cuối bị cắt mất dẫn đến sai số 1.00.",sample_type:"random",n_tokens:430,truncation:true,text:"well yellow cab i think our relationship is done..."},
+    {review_id:"CSKWCj0S9z_20TKQJfujxQ",abs_error:0.607,true_stars:2,pred:1.393,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('great') và chê ('horrible') kèm từ nối tương phản.",sample_type:"random",n_tokens:260,truncation:true,text:"bait and switch pricing. they used good prices for the first couple of weeks..."},
+    {review_id:"5OW-88MK2Vq0fO3w6rj4SA",abs_error:1.268,true_stars:2,pred:3.268,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen và chê ('rude') kèm từ nối tương phản.",sample_type:"random",n_tokens:117,truncation:false,text:"the drinks are good, but i've noticed some of the baristas talking about customers..."},
+    {review_id:"Vbda3ZwDMU5QCw_efhuSEQ",abs_error:0.869,true_stars:2,pred:1.131,error_group:"Khác",notes:"Review ngắn/trung tính (157 token); dự đoán 1.13 so với thật 2.",sample_type:"random",n_tokens:157,truncation:false,text:"our room would not lock when we attempted to leave for dinner..."},
+    {review_id:"ib2Xy4f22mm1cl01Lxj8wA",abs_error:0.170,true_stars:3,pred:3.170,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('delicious') và chê kèm từ nối tương phản.",sample_type:"random",n_tokens:42,truncation:false,text:"good product but i just cannot get behind their phobia of providing free wifi..."},
+    {review_id:"WNFU912lIB8dTe3ujfji1A",abs_error:1.461,true_stars:3,pred:4.461,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('perfect') và chê ('cold') kèm từ nối tương phản.",sample_type:"random",n_tokens:45,truncation:false,text:"perfect for the night shifter!! just wished it wasn't so smokey..."},
+    {review_id:"mBk2bLEFnUfP6JWmpdmToQ",abs_error:1.035,true_stars:3,pred:4.035,error_group:"Khác",notes:"Review ngắn/trung tính (83 token); dự đoán 4.04 so với thật 3.",sample_type:"random",n_tokens:83,truncation:false,text:"i come to this place for the butcher service..."},
+    {review_id:"7C7ixyPfNj9nux7SEJ9o7g",abs_error:0.135,true_stars:3,pred:2.865,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('delicious', 'superb') và chê ('disappointing') kèm từ nối tương phản.",sample_type:"random",n_tokens:314,truncation:true,text:"amada, you broke my heart tonight! i've been to amada at least 5-6 times..."},
+    {review_id:"MfrRQ6spAuet_8pdXZ59jg",abs_error:0.410,true_stars:4,pred:4.410,error_group:"Khác",notes:"Review ngắn/trung tính (80 token); dự đoán 4.41 so với thật 4.",sample_type:"random",n_tokens:80,truncation:false,text:"2nd time we ate here, 1st time dining in. i want to write a review..."},
+    {review_id:"leL34FYxuzPrYk7GJGoXaQ",abs_error:0.953,true_stars:4,pred:4.953,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('great', 'love') và chê kèm từ nối tương phản.",sample_type:"random",n_tokens:38,truncation:false,text:"love, love this place. great broth and large portions..."},
+    {review_id:"AoLw-hm33K_tPohdFjz_0Q",abs_error:0.070,true_stars:4,pred:4.070,error_group:"Khác",notes:"Review ngắn/trung tính (82 token); dự đoán 4.07 so với thật 4.",sample_type:"random",n_tokens:82,truncation:false,text:"my family and i went here for mother's day. great food as always..."},
+    {review_id:"vFjwOO7OmI5xYn1CP79eig",abs_error:0.332,true_stars:4,pred:4.332,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('fresh', 'friendly') và chê kèm từ nối tương phản.",sample_type:"random",n_tokens:409,truncation:true,text:"4 stars. smoke bellows from the chimney indicating that chicken is being grilled..."},
+    {review_id:"DB15huKaSx4wZwRjdDn-1A",abs_error:0.000,true_stars:5,pred:5.000,error_group:"Khác",notes:"Review ngắn/trung tính (59 token); dự đoán 5.00 so với thật 5.",sample_type:"random",n_tokens:59,truncation:false,text:"taylor- our waitress. phenomenal. great hospitality. fabulous food..."},
+    {review_id:"R9bxbTto2v6zrbFszZGCiQ",abs_error:0.484,true_stars:5,pred:4.516,error_group:"Khác",notes:"Review ngắn/trung tính (285 token); dự đoán 4.52 so với thật 5.",sample_type:"random",n_tokens:285,truncation:true,text:"more commonly referred to as 'the deli,' this place sits humbly..."},
+    {review_id:"QgwXHvTDcPCR_XMPO7CwyA",abs_error:0.000,true_stars:5,pred:5.000,error_group:"Khác",notes:"Review ngắn/trung tính (29 token); dự đoán 5.00 so với thật 5.",sample_type:"random",n_tokens:29,truncation:false,text:"this place is off the charts! you want to eat at this restaurant!!..."},
+    {review_id:"XSF6iCmkwIPoLjzc4flwlQ",abs_error:0.000,true_stars:5,pred:5.000,error_group:"Cảm xúc lẫn lộn",notes:"Review pha trộn khen ('amazing', 'wonderful') và chê kèm từ nối tương phản.",sample_type:"random",n_tokens:71,truncation:false,text:"i had cassandra do my hair today and i can honestly say it was an amazing experience..."},
+];
+
+// ============ HELPERS ============
+const groupColors = {
+    "Nhãn nhiễu": "#f472b6",
+    "Cảm xúc lẫn lộn": "#fbbf24",
+    "Bị cắt 256 token": "#f87171",
+    "Mỉa mai": "#c4b5fd",
+    "Khác": "#9ca3af"
+};
+const badgeClass = {
+    "Cảm xúc lẫn lộn": "badge-mixed",
+    "Bị cắt 256 token": "badge-truncated",
+    "Mỉa mai": "badge-sarcasm",
+    "Khác": "badge-other",
+    "Nhãn nhiễu": "badge-noise"
+};
+
+function stars(n) { return "⭐".repeat(n); }
+
+// ============ KPIs ============
+const totalMAE = DATA.reduce((s, d) => s + d.abs_error, 0) / DATA.length;
+const maxErr = DATA.reduce((m, d) => d.abs_error > m.abs_error ? d : m, DATA[0]);
+document.getElementById('kpi-mae').textContent = totalMAE.toFixed(3);
+document.getElementById('kpi-max').textContent = maxErr.abs_error.toFixed(3);
+document.getElementById('kpi-max-id').textContent = maxErr.review_id.slice(0, 12) + '…';
+
+// ============ CHARTS ============
+const groups = ["Cảm xúc lẫn lộn", "Bị cắt 256 token", "Mỉa mai", "Khác"];
+const groupCounts = groups.map(g => DATA.filter(d => d.error_group === g).length);
+
+Chart.defaults.color = '#8b8fa3';
+Chart.defaults.borderColor = 'rgba(42,46,61,0.6)';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// Pie
+new Chart(document.getElementById('chartPie'), {
+    type: 'doughnut',
+    data: {
+        labels: groups,
+        datasets: [{
+            data: groupCounts,
+            backgroundColor: groups.map(g => groupColors[g]),
+            borderWidth: 2, borderColor: '#1a1d27',
+            hoverOffset: 8
+        }]
+    },
+    options: {
+        cutout: '55%',
+        plugins: {
+            legend: { position: 'bottom', labels: { padding: 15, usePointStyle: true, pointStyleWidth: 10 } }
+        }
+    }
+});
+
+// Bar: MAE by group
+const groupMAE = groups.map(g => {
+    const items = DATA.filter(d => d.error_group === g);
+    return items.length ? items.reduce((s, d) => s + d.abs_error, 0) / items.length : 0;
+});
+new Chart(document.getElementById('chartBarGroup'), {
+    type: 'bar',
+    data: {
+        labels: groups,
+        datasets: [{
+            label: 'MAE trung bình',
+            data: groupMAE,
+            backgroundColor: groups.map(g => groupColors[g] + 'cc'),
+            borderColor: groups.map(g => groupColors[g]),
+            borderWidth: 1, borderRadius: 6, barPercentage: 0.65
+        }]
+    },
+    options: {
+        indexAxis: 'y',
+        scales: { x: { beginAtZero: true, title: { display: true, text: 'Abs Error' } } },
+        plugins: { legend: { display: false } }
+    }
+});
+
+// Scatter: True vs Pred
+const scatterData = groups.map(g => ({
+    label: g,
+    data: DATA.filter(d => d.error_group === g).map(d => ({x: d.true_stars, y: d.pred})),
+    backgroundColor: groupColors[g] + 'bb',
+    borderColor: groupColors[g],
+    pointRadius: 6, pointHoverRadius: 9
+}));
+new Chart(document.getElementById('chartScatter'), {
+    type: 'scatter',
+    data: { datasets: scatterData },
+    options: {
+        scales: {
+            x: { title: { display: true, text: 'True Stars' }, min: 0.5, max: 5.5 },
+            y: { title: { display: true, text: 'Predicted' }, min: 0.5, max: 5.5 }
+        },
+        plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12 } },
+            annotation: {}
+        }
+    },
+    plugins: [{
+        id: 'diagonalLine',
+        afterDraw(chart) {
+            const { ctx, scales: { x, y } } = chart;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(99,102,241,0.4)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x.getPixelForValue(0.5), y.getPixelForValue(0.5));
+            ctx.lineTo(x.getPixelForValue(5.5), y.getPixelForValue(5.5));
+            ctx.stroke();
+            ctx.restore();
+        }
+    }]
+});
+
+// Histogram
+const bins = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5];
+const binLabels = bins.map((b, i) => i < bins.length - 1 ? `${b}–${bins[i+1]}` : `${b}+`);
+const binCounts = bins.map((b, i) => {
+    const upper = i < bins.length - 1 ? bins[i + 1] : 999;
+    return DATA.filter(d => d.abs_error >= b && d.abs_error < upper).length;
+});
+new Chart(document.getElementById('chartHistogram'), {
+    type: 'bar',
+    data: {
+        labels: binLabels,
+        datasets: [{
+            label: 'Số review',
+            data: binCounts,
+            backgroundColor: 'rgba(99,102,241,0.6)',
+            borderColor: '#6366f1',
+            borderWidth: 1, borderRadius: 4
+        }]
+    },
+    options: {
+        scales: {
+            x: { title: { display: true, text: 'Abs Error Range' } },
+            y: { beginAtZero: true, title: { display: true, text: 'Count' }, ticks: { stepSize: 1 } }
+        },
+        plugins: { legend: { display: false } }
+    }
+});
+
+// Bar: MAE by true_stars
+const starGroups = [1, 2, 3, 4, 5];
+const starMAE = starGroups.map(s => {
+    const items = DATA.filter(d => d.true_stars === s);
+    return items.length ? items.reduce((a, d) => a + d.abs_error, 0) / items.length : 0;
+});
+const starCounts = starGroups.map(s => DATA.filter(d => d.true_stars === s).length);
+new Chart(document.getElementById('chartBarStar'), {
+    type: 'bar',
+    data: {
+        labels: starGroups.map(s => s + ' ⭐'),
+        datasets: [{
+            label: 'MAE',
+            data: starMAE,
+            backgroundColor: ['#ef4444cc', '#f59e0bcc', '#eab308cc', '#22d3eecc', '#10b981cc'],
+            borderColor: ['#ef4444', '#f59e0b', '#eab308', '#22d3ee', '#10b981'],
+            borderWidth: 1, borderRadius: 6
+        }]
+    },
+    options: {
+        scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'MAE' } }
+        },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                callbacks: {
+                    afterLabel: (ctx) => `n = ${starCounts[ctx.dataIndex]}`
+                }
+            }
+        }
+    }
+});
+
+// Comparison: worst vs random
+const worstMAE = DATA.filter(d => d.sample_type === 'worst');
+const randomMAE = DATA.filter(d => d.sample_type === 'random');
+const wAvg = worstMAE.reduce((s, d) => s + d.abs_error, 0) / worstMAE.length;
+const rAvg = randomMAE.reduce((s, d) => s + d.abs_error, 0) / randomMAE.length;
+new Chart(document.getElementById('chartCompare'), {
+    type: 'bar',
+    data: {
+        labels: ['Worst 20', 'Random 20'],
+        datasets: [{
+            label: 'MAE trung bình',
+            data: [wAvg, rAvg],
+            backgroundColor: ['rgba(239,68,68,0.6)', 'rgba(34,211,238,0.6)'],
+            borderColor: ['#ef4444', '#22d3ee'],
+            borderWidth: 1, borderRadius: 8, barPercentage: 0.5
+        }]
+    },
+    options: {
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'MAE' } } },
+        plugins: { legend: { display: false } }
+    }
+});
+
+// ============ HEATMAP ============
+(function buildHeatmap() {
+    const container = document.getElementById('heatmap');
+    const starVals = [1, 2, 3, 4, 5];
+    const grps = ["Cảm xúc lẫn lộn", "Bị cắt 256 token", "Mỉa mai", "Khác"];
+
+    let html = '<table class="data-table" style="min-width:600px"><thead><tr><th>True Stars ╲ Group</th>';
+    grps.forEach(g => html += `<th>${g}</th>`);
+    html += '</tr></thead><tbody>';
+
+    for (const s of starVals) {
+        html += `<tr><td><b>${s} ⭐</b></td>`;
+        for (const g of grps) {
+            const items = DATA.filter(d => d.true_stars === s && d.error_group === g);
+            if (!items.length) {
+                html += '<td style="text-align:center;color:#4a4e5f">—</td>';
+            } else {
+                const avg = items.reduce((a, d) => a + d.abs_error, 0) / items.length;
+                const intensity = Math.min(avg / 4, 1);
+                const r = Math.round(239 * intensity + 26 * (1 - intensity));
+                const gr = Math.round(68 * intensity + 29 * (1 - intensity));
+                const b = Math.round(68 * intensity + 39 * (1 - intensity));
+                html += `<td style="text-align:center;background:rgba(${r},${gr},${b},0.3);border-radius:4px;font-weight:600">${avg.toFixed(2)} <span style="font-size:0.7rem;color:var(--text-dim)">(n=${items.length})</span></td>`;
+            }
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    container.innerHTML = html;
+})();
+
+// ============ TABLE ============
+let currentFilter = 'all';
+let sortCol = 'abs_error';
+let sortAsc = false;
+
+function renderTable() {
+    let filtered = [...DATA];
+    if (currentFilter === 'worst') filtered = filtered.filter(d => d.sample_type === 'worst');
+    else if (currentFilter === 'random') filtered = filtered.filter(d => d.sample_type === 'random');
+    else if (currentFilter !== 'all') filtered = filtered.filter(d => d.error_group === currentFilter);
+
+    filtered.sort((a, b) => {
+        let va = a[sortCol], vb = b[sortCol];
+        if (typeof va === 'string') va = va.toLowerCase();
+        if (typeof vb === 'string') vb = vb.toLowerCase();
+        return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+    });
+
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = filtered.map((d, i) => {
+        const barWidth = Math.min(d.abs_error / 4 * 100, 100);
+        const bc = badgeClass[d.error_group] || 'badge-other';
+        const st = d.sample_type === 'worst' ? 'badge-worst' : 'badge-random';
+        return `<tr>
+            <td>${i + 1}</td>
+            <td style="font-family:monospace;font-size:0.78rem;white-space:nowrap">${d.review_id.slice(0, 16)}…</td>
+            <td>
+                <span style="font-weight:700;color:${d.abs_error > 2 ? '#f87171' : d.abs_error > 1 ? '#fbbf24' : '#10b981'}">${d.abs_error.toFixed(3)}</span>
+                <div class="error-bar" style="width:${barWidth}%;margin-top:3px"></div>
+            </td>
+            <td>${d.true_stars} ⭐</td>
+            <td>${d.pred.toFixed(2)}</td>
+            <td><span class="badge ${bc}">${d.error_group}</span></td>
+            <td><span class="badge ${st}">${d.sample_type}</span></td>
+            <td>${d.n_tokens}${d.truncation ? ' ✂️' : ''}</td>
+            <td><div class="text-preview" onclick="this.classList.toggle('expanded')">${d.text}</div></td>
+            <td style="font-size:0.8rem;color:var(--text-dim);max-width:250px">${d.notes}</td>
+        </tr>`;
+    }).join('');
+}
+
+// Filter buttons
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        renderTable();
+    });
+});
+
+// Sort headers
+document.querySelectorAll('.data-table thead th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+        const col = th.dataset.sort;
+        if (col === sortCol) sortAsc = !sortAsc;
+        else { sortCol = col; sortAsc = true; }
+        renderTable();
+    });
+});
+
+renderTable();
+</script>
+</body>
+</html>
+

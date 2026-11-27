@@ -1,4 +1,8 @@
-"""CSV-only Yelp dashboard. Run: streamlit run app/streamlit_dashboard.py."""
+"""CSV-only Yelp dashboard. Run: streamlit run app/streamlit_dashboard.py.
+
+Default data directory: project_root/data/
+Override via env var: YELP_REPORTS_DIR=/path/to/csvs
+"""
 from pathlib import Path
 import os
 import sys
@@ -53,7 +57,7 @@ def validate_predictions(df: pd.DataFrame) -> None:
             raise ValueError(f"{error} không khớp sai số tuyệt đối của {pred}.")
 
 
-def load_data(reports_dir: str = "reports") -> tuple[pd.DataFrame, pd.DataFrame]:
+def load_data(reports_dir: str = "data") -> tuple[pd.DataFrame, pd.DataFrame]:
     directory = Path(reports_dir)
     summary = pd.read_csv(directory / "model_summary.csv", dtype={"split_id": str})
     path = directory / "test_predictions_with_text.csv"
@@ -167,7 +171,7 @@ def render_worst_cases(preds_df: pd.DataFrame, model: str, top_k: int = 10) -> N
 def main() -> None:
     st.set_page_config(page_title="Yelp · Dashboard kết quả", page_icon="⭐", layout="wide")
     st.title("Yelp · Dự đoán điểm đánh giá")
-    default_dir = os.environ.get("YELP_REPORTS_DIR", str(ROOT / "reports"))
+    default_dir = os.environ.get("YELP_REPORTS_DIR", str(ROOT / "data"))
     reports_dir = st.sidebar.text_input("Thư mục CSV", value=default_dir)
     if (Path(reports_dir) / "DEMO_ONLY.txt").exists():
         st.warning("DỮ LIỆU GIẢ LẬP — chỉ kiểm tra giao diện, không dùng làm kết quả báo cáo.")

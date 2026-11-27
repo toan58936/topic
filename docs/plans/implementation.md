@@ -138,7 +138,7 @@
 |------|-------|------|--------|
 | 6.1 | C | Validate pipeline outputs sau Leader training: checkpoints, history.csv, run_meta.json, merge predictions, model_summary.csv, dashboard load | Dashboard reads CSVs ✓; features pending |
 | 6.2 | E | Finalize dashboard: charts, filters, detail view với CSV thực | Code done, tests pass; charts/filters pending |
-| 6.3 | E | Error Analysis: sample 40 reviews từ `test_predictions_with_text.csv`, gán 5 nhóm lỗi, Leader cross-check 4 reviews | Pending |
+| 6.3 | E | **Error Analysis (automated via `scripts/error_analysis.py`):**<br>1. `prepare` → auto-sample 40 reviews (20 worst + 20 random stratified), create templates<br>2. E annotates `error_analysis.csv` (40 rows, 5 groups)<br>3. Leader cross-checks 4 reviews via `leader_crosscheck_with_text.csv`<br>4. `summarize` → validates, checks ≥75% agreement, outputs summary MD/CSV | Pending |
 | 6.4 | Leader | Tổng hợp `ai_log.md`, viết báo cáo PDF, chuẩn bị demo | Pending |
 
 ---
@@ -208,7 +208,8 @@
 
 ### Phase 6 Done khi:
 - [x] Dashboard code chạy local, đọc CSV đúng (code viết xong, test pass, CSV thật có sẵn)
-- [ ] `error_analysis.csv` 40 review, 5 nhóm, Leader cross-check (chưa làm)
+- [ ] `error_analysis.csv` 40 review, 5 nhóm, Leader cross-check ≥75% (via `scripts/error_analysis.py` prepare → annotate → summarize)
+- [ ] `error_group_summary.csv` + `error_analysis_summary.md` generated cho báo cáo
 - [ ] Báo cáo PDF + `ai_log.md` hoàn chỉnh (ai_log có entries Phase 1,2,3; cần thêm 4,5,6)
 - [ ] Demo sẵn sàng
 

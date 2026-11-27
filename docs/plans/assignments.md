@@ -118,10 +118,10 @@
 | **Specs** | `docs/05_dashboard.md`, `docs/05_dashboard_tests.md` |
 | **Tests** | `tests/test_dashboard.py` (CPU, no torch) |
 | **Deliverables (Dashboard)** | - Đọc `reports/test_predictions.csv` + `model_summary.csv`<br>- Auto-detect `test_predictions_with_text.csv`<br>- Bảng so sánh 5 models (metrics + cost)<br>- Charts: Pred vs True, Error dist, Per-star MAE/RMSE<br>- Error cases table (top 10, filterable by star)<br>- Detail view (text nếu có with_text)<br>- Code pass pytest CPU<br>- PR merged → `develop` |
-| **Deliverables (Error Analysis - SAU KHI LEADER TRAINING XONG)** | - Sample 40 reviews: 20 worst + 20 random stratified (4/star × 5)<br>- Annotate 5 groups: Nhãn nhiễu, Cảm xúc lẫn lộn, Bị cắt, Mỉa mai, Khác<br>- Leader cross-check 4 reviews (≥75% agreement)<br>- `reports/error_analysis.csv` + summary cho báo cáo |
+| **Deliverables (Error Analysis - AUTOMATED via `scripts/error_analysis.py`)** | - **Run prepare:** `python -m scripts.error_analysis prepare --reports-dir reports`<br>&nbsp;&nbsp;→ Auto-selects best model (RoBERTa), samples 40 reviews (20 worst + 20 random stratified 4/star), creates template files<br>- **Annotate:** E reads `error_sample_with_text.csv`, fills `error_group` + `notes` in `error_analysis.csv` (40 rows, 5 groups: Nhãn nhiễu, Cảm xúc lẫn lộn, Bị cắt token, Mỉa mai, Khác)<br>- **Leader cross-check:** Leader fills `leader_error_group` + `leader_notes` in `leader_crosscheck_with_text.csv` (4 reviews)<br>- **Run summarize:** `python -m scripts.error_analysis summarize --reports-dir reports`<br>&nbsp;&nbsp;→ Validates annotations, checks cross-check agreement ≥75%, outputs `error_group_summary.csv` + `error_analysis_summary.md`<br>- Final deliverable: `reports/error_analysis.csv` (validated), summary files for report |
 | **GitHub** | `feature/dashboard` → PR → `develop` (có thể dev với CSV dummy từ đầu) |
 | **AI Log** | Phase 6 (dashboard dev, error analysis) |
-| **Dependencies** | Cần Leader xong training → C validate outputs → có `test_predictions.csv`, `model_summary.csv` thực |
+| **Dependencies** | Cần Leader xong training → C validate outputs → có `test_predictions.csv`, `model_summary.csv`, `test_predictions_with_text.csv` thực |
 
 ---
 
